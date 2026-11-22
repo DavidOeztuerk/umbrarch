@@ -24,6 +24,8 @@ public static class PolicyRules
     public const string DenyBash = "deny_bash";
     /// <summary>Schutz geschützter Branches und Merge-Wege (ADR-0007).</summary>
     public const string ProtectBranches = "protect_branches";
+    /// <summary>Schutz des Haupt-Checkouts eines erweckten Projekts (ADR-0020).</summary>
+    public const string ProtectMainCheckout = "protect_main_checkout";
     /// <summary>Read-only Shadow-Klassen.</summary>
     public const string ShadowReadOnly = "shadow_read_only";
     /// <summary>Hoher Rank in permissiven Modi (ADR-0002).</summary>

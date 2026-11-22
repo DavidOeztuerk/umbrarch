@@ -1,14 +1,14 @@
 # RECAP
 
 ## Stand
-- Zeitpunkt: 2026-11-22T11:56:52Z
+- Zeitpunkt: 2026-11-22T13:42:46Z
 - Plan: Pro
-- Mana 5h: 73% (Limit 90%, Reset 2026-11-22T13:10:00Z)
-- Mana 7d: 67% (Limit 96%, Reset 2026-11-25T11:00:00Z)
+- Mana 5h: 28% (Limit 90%, Reset 2026-11-22T18:10:00Z)
+- Mana 7d: 71% (Limit 96%, Reset 2026-11-25T11:00:00Z)
 - Limits: 5h 90%, 7d 96% (plan default)
 
 ## Aktiv
-- Gate G-0130 · Quest Q-0192 [A] · Phase in_progress
+- Gate G-0130 · Quest Q-0193 [A] · Phase in_progress
 
 ## Erledigt
 - Q-0113 [A] cleared: Merge-Policy nach Zielbranch - https://github.com/DavidOeztuerk/umbrarch/pull/15 - Evidence: https://github.com/DavidOeztuerk/monarch/actions/runs/40721744761/job/122946762702, https://github.com/DavidOeztuerk/monarch/actions/runs/40721744761/job/122946762600, https://github.com/DavidOeztuerk/monarch/actions/runs/40721744761/job/122943422084, https://github.com/DavidOeztuerk/monarch/actions/runs/40721744761/job/122943425111, https://github.com/DavidOeztuerk/monarch/actions/runs/40721758194/job/122934234801, https://github.com/DavidOeztuerk/monarch/pull/15
@@ -31,15 +31,17 @@
 - Q-0150: bench/test-gate.sh erweitert, vorher rot, danach grün, deterministisch über BENCH_RESULTS_DIR: knapp unter den C1-Schwellen grün, knapp darüber rot je Klasse; Schwellen nicht über die Umgebung anhebbar; auf einem anderen Betriebssystem Exit 2; alle bestehenden Prüfungen unverändert grün
 - Q-0150: Verweise: der Kommentar zu C1 in .github/workflows/ci.yml nennt die Bedingung ruhige Maschine und den Nachtrag; docs/lessons.md bekommt einen kurzen Nachtrag; die CI-Schritte selbst ändern sich nicht
 - Q-0150: Heikle Quest nach Standardregel 3: Warden-Runde über das Design vor dem Code, kein src-Code, kein anderer Test und keine andere Schwelle aufgeweicht, Schlussrunde des Wardens mit Verdict am Head-SHA
-- Q-0192: ADR-0020 in einfacher Sprache deckt alle Teile ab: Haupt-Checkout-Schutz (Befehlsliste, Ausnahmen, Zielermittlung), Shadow-Bremse (Prüfung vor dem Start, Verweigerung im laufenden Shadow, Freshness, Default ohne Messwert), Fall „Reset erfolgt“ mit Obergrenze und Weckzeit, gate move-quest, gate cleanup, Gate-Status merged und Weg des Monarch-Stands gemergter Gates (#139)
-- Q-0192: Messung der Kosten je Shadow mit Belegen: Befehl, Ledger-Quellen, Filter (Plan Pro, ohne Überlappung, Snapshot höchstens 2 min vor Start und nach Ende), n, Median, p90 und Max je Shadow und Modell
-- Q-0192: Owner-Vorgaben nur wörtlich mit Datum und Quelle (CLAUDE.md Regel 4); alles andere als „Vorschlag“ oder „OFFEN“ markiert, Zusammenfassungen als „Zusammenfassung“
-- Q-0192: Jede Fundstelle mit Datei, Zeile und Befehl (CLAUDE.md Regel 5)
-- Q-0192: Warden-Designrunde vor dem ersten Code-Commit des Gates; höchstens eine Delta-Runde, danach ggf. schmale Prüfung nur des Fixes (Standardregel 3)
-- Q-0192: Enthält die ADR Owner-Entscheide: nach der Owner-Freigabe braucht jede Änderung eine neue Freigabe (CLAUDE.md Regel 3)
+- Q-0193: Voraussetzung: Designrunde von Q-0192 abgeschlossen
+- Q-0193: Roter Test zuerst, im PR belegt: git checkout main und git commit im Haupt-Checkout eines erweckten Projekts werden heute nicht verweigert
+- Q-0193: Neue Regel protect_main_checkout: Deny für git checkout, switch, reset, merge, pull, commit, rebase und stash im Haupt-Checkout eines erweckten Projekts (endgültige Liste laut ADR-0020); git worktree add, worktree remove/list/prune, fetch und die lesenden Befehle (ReadOnlyGit) bleiben erlaubt
+- Q-0193: Kandidaten laut ADR-0020 Abschnitt 1 (Vereinigung, anders als FindRepos): FindGitDir je Basis aus cwd, cd, pushd und popd, wobei jedes -C die Basen der Reihe nach ersetzt; dazu jedes --git-dir/GIT_DIR und jeder --work-tree/GIT_WORK_TREE (Arbeitsbaum über FindGitDir, also auch ein Unterordner des Haupt-Checkouts); keiner davon ersetzt die Suche über die Basen. Die Regel greift in Evaluate und in EvaluateProtection, also auch git -C <Haupt-Checkout> commit aus einer Worktree
+- Q-0193: Deny-Tests: git --work-tree=/tmp/x checkout main und GIT_DIR=/tmp/y/.git git status; git checkout main, je mit cwd im Haupt-Checkout; git --work-tree=<Haupt-Checkout>/src checkout -f -- . mit cwd in einer Worktree. Allow-Test: git -C <Worktree> commit mit cwd im Haupt-Checkout
+- Q-0193: Worktrees desselben Repos und nicht erweckte Repos bleiben unberührt (Tests)
+- Q-0193: Deny-Text nennt den Ausweg (Gate-Worktree)
+- Q-0193: Warden: höchstens eine Delta-Runde, danach ggf. schmale Prüfung nur des Fixes (Standardregel 3)
 
 ## Nächster konkreter Schritt
-G-0130 (Worktree .claude/worktrees/G-0130, Branch monarch/G-0130-selbst-aufraeumen, PR 163, Head 7000398). Q-0192 aktiv (Design ADR-0020). Warden-Designrunde 1 = changes (6 major, Kommentar issuecomment-7078646801); alle 6 major im Delta 7000398 behoben, Kritiker-Befunde behoben. Als Naechstes: Warden-Delta-Runde (Opus) nur ueber das Delta 9c088b0..7000398 gegen die 6 major; bei approve gate-unabhaengig weiter mit Q-0193 (Knight, TDD rot zuerst), dann Q-0194..Q-0198 nacheinander. minor-Befunde 7-18 der Runde 1 kommen ins Issue Nacharbeit G-0130. Reibung bisher: Deny Klassifizierer (Skript mit zerstueckeltem Pfad, sleep-Logger), Scope-Lock auf Scratchpad nach quest start (3x), Fehlalarm for-Schleife ueber .monarch/quests, Isolation lehnt Inline-Python ab. Owner-Fragen fuer den Bericht: Offen 1-3 im ADR, RecapAndStop nach 10 min als Verhaltensaenderung, untracked Ledger-Dateien (Optionen).
+G-0130 (Worktree .claude/worktrees/G-0130, PR 163). Q-0192 in_review: Design ADR-0020 vom Warden freigegeben (schmale Pruefung approve, issuecomment-7079968810; Delta-Runde changes issuecomment-7079794677; Fix 3db0db9, Belege 04744f4). Q-0193 in_progress: Knight arbeitet (TDD, kein Commit; Main committet nach Kritiker, dann quest submit, quest pr Q-0193 163). Danach Q-0194..Q-0198. Hinweise: Q-0195 boss praezisieren (anderes Fenster nicht zurueckgesetzt, resets_at > jetzt); Q-0197 carry darf nicht BoardNames.ParseState zur Pruefung nutzen (macht Unbekanntes still zu proposed). Nacharbeit-Issue: minor 7-18 Runde 1, Delta-minor c e f h, Warden-Hinweis Belege. Kosmetisch g bleibt im PR-Kommentar.
 
 ## Offene Entscheidungen
 - Owner: historische docs (ADR-0001..0018, lessons, evidence) bleiben? Default ja (Vorschlag)
