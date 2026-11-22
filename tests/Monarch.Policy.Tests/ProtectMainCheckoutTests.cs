@@ -166,6 +166,44 @@ public sealed class ProtectMainCheckoutTests : IDisposable
     public void Env_takes_only_the_last_chdir_of_one_call() => Deny("env -C /tmp -C . git commit -m x", _main);
 
     [Fact]
+    public void Git_shallow_file_with_a_separate_value_does_not_hide_the_subcommand() => Deny("git --shallow-file x commit -m x", _main);
+
+    [Theory]
+    [InlineData("env -C{0} git commit -m x")]
+    [InlineData("env -vC {0} git commit -m x")]
+    [InlineData("env -iC {0} git commit -m x")]
+    [InlineData("env -iC{0} git commit -m x")]
+    [InlineData("env -i -u FOO -C {0} git commit -m x")]
+    public void Env_short_options_in_getopt_form_are_read(string template) => Deny(string.Format(template, _main), _wt);
+
+    [Theory]
+    [InlineData("env -C {0} sh -c \"git commit -m x\"")]
+    [InlineData("env -C {0} bash -c 'git commit -m x'")]
+    [InlineData("env -vC {0} sh -c \"git commit -m x\"")]
+    public void Env_chdir_also_applies_to_the_shell_code_of_sh_c(string template) => Deny(string.Format(template, _main), _wt);
+
+    [Fact]
+    public void Env_chdir_into_a_worktree_before_sh_c_is_allowed() => Allow($"env -C {_wt} sh -c \"git commit -m x\"", _main);
+
+    [Fact]
+    public void Env_chdir_before_a_shell_reading_a_heredoc_applies_to_its_code() =>
+        Deny($"env -C {_main} sh <<'EOF'\ngit commit -m x\nEOF", _wt);
+
+    [Fact]
+    public void Env_chdir_of_the_shell_behind_a_pipe_applies_to_the_heredoc_code() =>
+        Deny($"cat <<'EOF' | env -C {_main} sh\ngit commit -m x\nEOF", _wt);
+
+    [Fact]
+    public void Env_chdir_of_the_command_before_the_pipe_does_not_move_the_shell() =>
+        Deny($"env -C {_wt} cat <<'EOF' | sh\ngit commit -m x\nEOF", _main);
+
+    [Theory]
+    [InlineData("env --ch {0} git commit -m x")]
+    [InlineData("env --chd={0} git commit -m x")]
+    [InlineData("env --u FOO --c {0} git commit -m x")]
+    public void Env_long_options_may_be_abbreviated(string template) => Deny(string.Format(template, _main), _wt);
+
+    [Fact]
     public void Basis_git_checkout_main_in_the_main_checkout_is_denied() => Deny("git checkout main", _main);
 
     [Fact]

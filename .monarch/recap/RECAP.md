@@ -1,14 +1,14 @@
 # RECAP
 
 ## Stand
-- Zeitpunkt: 2026-11-22T13:42:46Z
+- Zeitpunkt: 2026-11-22T14:28:18Z
 - Plan: Pro
-- Mana 5h: 28% (Limit 90%, Reset 2026-11-22T18:10:00Z)
-- Mana 7d: 71% (Limit 96%, Reset 2026-11-25T11:00:00Z)
+- Mana 5h: 58% (Limit 90%, Reset 2026-11-22T18:10:00Z)
+- Mana 7d: 75% (Limit 96%, Reset 2026-11-25T11:00:00Z)
 - Limits: 5h 90%, 7d 96% (plan default)
 
 ## Aktiv
-- Gate G-0130 · Quest Q-0193 [A] · Phase in_progress
+- keine aktive Quest
 
 ## Erledigt
 - Q-0113 [A] cleared: Merge-Policy nach Zielbranch - https://github.com/DavidOeztuerk/umbrarch/pull/15 - Evidence: https://github.com/DavidOeztuerk/monarch/actions/runs/40721744761/job/122946762702, https://github.com/DavidOeztuerk/monarch/actions/runs/40721744761/job/122946762600, https://github.com/DavidOeztuerk/monarch/actions/runs/40721744761/job/122943422084, https://github.com/DavidOeztuerk/monarch/actions/runs/40721744761/job/122943425111, https://github.com/DavidOeztuerk/monarch/actions/runs/40721758194/job/122934234801, https://github.com/DavidOeztuerk/monarch/pull/15
@@ -31,17 +31,9 @@
 - Q-0150: bench/test-gate.sh erweitert, vorher rot, danach grün, deterministisch über BENCH_RESULTS_DIR: knapp unter den C1-Schwellen grün, knapp darüber rot je Klasse; Schwellen nicht über die Umgebung anhebbar; auf einem anderen Betriebssystem Exit 2; alle bestehenden Prüfungen unverändert grün
 - Q-0150: Verweise: der Kommentar zu C1 in .github/workflows/ci.yml nennt die Bedingung ruhige Maschine und den Nachtrag; docs/lessons.md bekommt einen kurzen Nachtrag; die CI-Schritte selbst ändern sich nicht
 - Q-0150: Heikle Quest nach Standardregel 3: Warden-Runde über das Design vor dem Code, kein src-Code, kein anderer Test und keine andere Schwelle aufgeweicht, Schlussrunde des Wardens mit Verdict am Head-SHA
-- Q-0193: Voraussetzung: Designrunde von Q-0192 abgeschlossen
-- Q-0193: Roter Test zuerst, im PR belegt: git checkout main und git commit im Haupt-Checkout eines erweckten Projekts werden heute nicht verweigert
-- Q-0193: Neue Regel protect_main_checkout: Deny für git checkout, switch, reset, merge, pull, commit, rebase und stash im Haupt-Checkout eines erweckten Projekts (endgültige Liste laut ADR-0020); git worktree add, worktree remove/list/prune, fetch und die lesenden Befehle (ReadOnlyGit) bleiben erlaubt
-- Q-0193: Kandidaten laut ADR-0020 Abschnitt 1 (Vereinigung, anders als FindRepos): FindGitDir je Basis aus cwd, cd, pushd und popd, wobei jedes -C die Basen der Reihe nach ersetzt; dazu jedes --git-dir/GIT_DIR und jeder --work-tree/GIT_WORK_TREE (Arbeitsbaum über FindGitDir, also auch ein Unterordner des Haupt-Checkouts); keiner davon ersetzt die Suche über die Basen. Die Regel greift in Evaluate und in EvaluateProtection, also auch git -C <Haupt-Checkout> commit aus einer Worktree
-- Q-0193: Deny-Tests: git --work-tree=/tmp/x checkout main und GIT_DIR=/tmp/y/.git git status; git checkout main, je mit cwd im Haupt-Checkout; git --work-tree=<Haupt-Checkout>/src checkout -f -- . mit cwd in einer Worktree. Allow-Test: git -C <Worktree> commit mit cwd im Haupt-Checkout
-- Q-0193: Worktrees desselben Repos und nicht erweckte Repos bleiben unberührt (Tests)
-- Q-0193: Deny-Text nennt den Ausweg (Gate-Worktree)
-- Q-0193: Warden: höchstens eine Delta-Runde, danach ggf. schmale Prüfung nur des Fixes (Standardregel 3)
 
 ## Nächster konkreter Schritt
-G-0130 (Worktree .claude/worktrees/G-0130, PR 163). Q-0192 in_review: Design ADR-0020 vom Warden freigegeben (schmale Pruefung approve, issuecomment-7079968810; Delta-Runde changes issuecomment-7079794677; Fix 3db0db9, Belege 04744f4). Q-0193 in_progress: Knight arbeitet (TDD, kein Commit; Main committet nach Kritiker, dann quest submit, quest pr Q-0193 163). Danach Q-0194..Q-0198. Hinweise: Q-0195 boss praezisieren (anderes Fenster nicht zurueckgesetzt, resets_at > jetzt); Q-0197 carry darf nicht BoardNames.ParseState zur Pruefung nutzen (macht Unbekanntes still zu proposed). Nacharbeit-Issue: minor 7-18 Runde 1, Delta-minor c e f h, Warden-Hinweis Belege. Kosmetisch g bleibt im PR-Kommentar.
+G-0130 PR 163. Q-0192 in_review (Design freigegeben, issuecomment-7079968810). Q-0193 in_review: Code 27d5815, Warden-Code-Runde changes (issuecomment-7080369605, 3 major), Fix 8198b9d (issuecomment-7080564575), Warden-Delta-Runde laeuft. Bei approve: weiter Q-0194 (Knight, ADR §2, Matcher hooks.json, tools/shadow-costs.py), sonst schmale Pruefung nur des Fixes, dann Owner. Nacharbeit-Issue am Gate-Ende: Runde-1-minor soweit offen, Delta-minor c e f h, Q-0193-minor 6 7 8. Q-0195 boss praezisieren (anderes Fenster nicht zurueckgesetzt). Q-0197 carry nicht ueber BoardNames.ParseState pruefen.
 
 ## Offene Entscheidungen
 - Owner: historische docs (ADR-0001..0018, lessons, evidence) bleiben? Default ja (Vorschlag)
