@@ -168,6 +168,10 @@ Befund ohne Umbau: Der Hook behandelt einen `general-purpose`-Agenten wie jeden 
 | Hook-Matcher ohne Agent | `plugin/hooks/hooks.json:16` | `grep -n "matcher" plugin/hooks/hooks.json` |
 | tool_input ohne subagent_type und model | `src/Monarch.Cli/Dtos.cs:35-47` | `grep -n "JsonPropertyName" src/Monarch.Cli/Dtos.cs` |
 | Repo-Ermittlung für git-Befehle | `src/Monarch.Policy/ProtectBranchesRule.cs:205-245`, `src/Monarch.Policy/BranchGuard.cs:156-190` | `grep -n "FindRepos\|FindGitDir" src/Monarch.Policy/*.cs` |
+| -C ersetzt die Basen; relative --git-dir/GIT_DIR gegen die Basen | `src/Monarch.Policy/ProtectBranchesRule.cs:223`, `:238` | `grep -n "bases = next\|AbsFrom(dir, b)" src/Monarch.Policy/ProtectBranchesRule.cs` |
+| Gate-Status ist freier Text | `src/Monarch.Application/Ports/IQuestBoard.cs:12` | `grep -n "record BoardGate" src/Monarch.Application/Ports/IQuestBoard.cs` |
+| Geschlossene Gate-Zustände und ihre Prüfung | `src/Monarch.Cli/GateMergeCommands.cs:20`, `:669`; Aufrufer von `Resolve` `:70`, `:374`; `gate check` liest `GateMerged` `:118` | `grep -n "ClosedGateStates\|Resolve(env, gateId" src/Monarch.Cli/GateMergeCommands.cs`, `grep -n 'Type == "GateMerged"' src/Monarch.Cli/GateMergeCommands.cs` |
+| Gültige Quest-Zustände | `src/Monarch.Infrastructure.Boards/BoardNames.cs:8-19` | `grep -n "public static string State\|QuestState\.[A-Za-z]* =>" src/Monarch.Infrastructure.Boards/BoardNames.cs` (Kopf in :8, die acht Zustände in :10-17) |
 | gate/wake nur Main, jeder Agent | `src/Monarch.Policy/ProtectBranchesRule.cs:20`, `:41-56` | `grep -n "GateOnlyMain" src/Monarch.Policy/ProtectBranchesRule.cs` |
 | read-only nur warden, scout | `src/Monarch.Policy/ToolCallTypes.cs:104` | `grep -n "ReadOnlyShadowTypes { get" src/Monarch.Policy/ToolCallTypes.cs` |
 | Ask→Deny für jeden Subagenten | `src/Monarch.Cli/HookRunner.cs:23-38` | `grep -n "ConvertAskForSubagent" src/Monarch.Cli/HookRunner.cs` |
