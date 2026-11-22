@@ -18,5 +18,6 @@ scope:
   exclude: []
 estimate: { session_pct: 16, weekly_pct: 4, gold_usd: 0 }
 boss: "Tabellen-Test je verweigertem Befehl und Zielform: deny mit cwd im Haupt-Checkout; deny für cd und -C von einer Worktree aus in den Haupt-Checkout; deny für --git-dir, GIT_DIR, --work-tree (auch auf einen Unterordner) und GIT_WORK_TREE auf den Haupt-Checkout mit cwd in einer Worktree oder einem Ordner ohne Repo; allow, wenn kein Kandidat ein Haupt-Checkout ist (Worktree, nicht erweckte Repos); dazu die vier Fälle aus der DoD; dotnet test grün"
+board: { pr: 163 }
 ---
 # Haupt-Checkout-Schutz: Regel protect_main_checkout (#46)

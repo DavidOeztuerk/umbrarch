@@ -25,12 +25,8 @@ public static partial class ToolCallPolicy
         return null;
     }
 
-    private static bool StashReads(string[] t, int subIndex)
-    {
-        for (var i = subIndex + 1; i < t.Length; i++)
-            if (!t[i].StartsWith('-')) return t[i] is "list" or "show";
-        return false;
-    }
+    /// <summary>Nur <c>git stash list</c> und <c>git stash show</c> lesen; beginnt der Rest mit einer Option, ist es ein <c>stash push</c>.</summary>
+    private static bool StashReads(string[] t, int subIndex) => subIndex + 1 < t.Length && t[subIndex + 1] is "list" or "show";
 
     /// <summary>Vereinigung der Kandidaten: Git-Verzeichnis je Basis (nach <c>-C</c>), dazu ausdrückliche Git-Verzeichnisse und Arbeitsbäume.</summary>
     private static bool TargetsMainCheckout(PolicyContext ctx, Canon paths, List<BashAnalysis.Segment> all, int index, int subIndex)
@@ -46,7 +42,7 @@ public static partial class ToolCallPolicy
             else if (t[i].StartsWith("--git-dir=", StringComparison.Ordinal)) gitDirs.Add(t[i]["--git-dir=".Length..]);
             else if (t[i] == "--work-tree" && i + 1 < t.Length) workTrees.Add(t[++i]);
             else if (t[i].StartsWith("--work-tree=", StringComparison.Ordinal)) workTrees.Add(t[i]["--work-tree=".Length..]);
-            else if (t[i] == "-c") i++;
+            else if (BashAnalysis.GitOptionTakesValue(t[i])) i++;
         }
 
         foreach (var seg in all)

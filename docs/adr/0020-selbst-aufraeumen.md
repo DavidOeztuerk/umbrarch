@@ -1,10 +1,10 @@
 # ADR-0020: Selbst aufräumen (v0.2 Teil 1)
 
-- Status: Vorgeschlagen (Warden-Designrunde ausstehend)
+- Status: Design vom Warden freigegeben für develop (schmale Prüfung des Fixes, approve, PR #163, Kommentar `#issuecomment-7079968810`); Owner-Fragen siehe „Offen“
 - Datum: 2026-11-22
 - Gate: G-0130, Quests Q-0192 bis Q-0198
 - Bezug: #46, #161, #74, #139, #16, #81, #44, #36, ADR-0003, ADR-0004, ADR-0007, ADR-0008, ADR-0010, ADR-0011, ADR-0012, ADR-0015, ADR-0018, ADR-0019
-- Fassung: Delta nach Warden-Designrunde 1 (PR #163, Kommentar `#issuecomment-7078646801`)
+- Fassung: Designrunde 1 (`#issuecomment-7078646801`), Delta-Runde (`#issuecomment-7079794677`), Fix und schmale Prüfung (`#issuecomment-7079968810`)
 
 ## Owner-Vorgaben
 
@@ -32,7 +32,7 @@ Alles Weitere in diesem Dokument ist technisches Design der Session. Wo es über
 
 **Was zählt.** Ein Bash-Segment mit dem Wort `git` und einem dieser Unterbefehle: `checkout`, `switch`, `reset`, `merge`, `pull`, `commit`, `rebase`, `stash`. Den Unterbefehl bestimmt `BashAnalysis.GitSubcommand` wie bei `protect_branches`; globale Optionen wie `-c` oder `--no-pager` davor zählen nicht. `git stash list` und `git stash show` lesen nur und zählen nicht (Vorschlag: Lesart von „schreibende Git-Befehle“).
 
-**Wo der Befehl läuft.** Die Verzeichnisse vor dem Segment (cwd, `cd`, `pushd`, `popd` aus dem cwd-Modell), danach jedes `-C <dir>` der Reihe nach. Die Regel prüft eine Vereinigung von Kandidaten und verweigert, sobald einer davon ein Haupt-Checkout ist:
+**Wo der Befehl läuft.** Die Verzeichnisse vor dem Segment (cwd, `cd`, `pushd`, `popd` aus dem cwd-Modell), danach jedes `-C <dir>` der Reihe nach. Ein `env -C <dir>` oder `env --chdir=<dir>` direkt vor `git` zählt wie `git -C <dir>` (Warden-Code-Runde Q-0193). Die Regel prüft eine Vereinigung von Kandidaten und verweigert, sobald einer davon ein Haupt-Checkout ist:
 - das Git-Verzeichnis je Basis über `BranchGuard.FindGitDir`. Basen sind die Verzeichnisse aus dem cwd-Modell (cwd, `cd`, `pushd`, `popd`). Jedes `-C <dir>` ersetzt die Basen der Reihe nach, wie bei `FindRepos` (`ProtectBranchesRule.cs:215-223`), denn Git arbeitet dann in `<dir>` und nicht im cwd. Lässt sich ein `-C` nicht auflösen, bleiben die bisherigen Basen stehen (`:223`), mit cwd im Haupt-Checkout also ein Deny;
 - jedes ausdrückliche Git-Verzeichnis aus `--git-dir` im Segment oder `GIT_DIR` aus irgendeinem Segment;
 - jeden ausdrücklichen Arbeitsbaum aus `--work-tree` im Segment oder `GIT_WORK_TREE` aus irgendeinem Segment.

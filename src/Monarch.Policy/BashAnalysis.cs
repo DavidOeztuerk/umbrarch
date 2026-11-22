@@ -9,7 +9,8 @@ internal static class BashAnalysis
     private static readonly string[] Wrappers = ["sudo", "env", "command", "builtin", "exec", "nohup", "time", "nice", "timeout", "setsid"];
     private static readonly string[] Keywords = ["if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done", "case", "esac", "{", "}", "!"];
     private static readonly string[] SudoOptionsWithValue = ["-u", "-g", "-h", "-p", "-U", "-C", "-D", "-R", "-T"];
-    private static readonly string[] EnvOptionsWithValue = ["-u", "-C", "-S", "-P"];
+    private static readonly string[] EnvOptionsWithValue = ["-u", "--unset", "-C", "--chdir", "-S", "-P"];
+    private static readonly string[] GitOptionsWithValue = ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env", "--attr-source"];
     private static readonly string[] Shells = ["bash", "sh", "zsh", "dash"];
     private static readonly string[] StdinCodeSinks = ["bash", "sh", "zsh", "dash", "source", ".", "eval"];
     private static readonly string[] DeclareWords = ["export", "declare", "local", "readonly", "typeset"];
@@ -256,7 +257,7 @@ internal static class BashAnalysis
                 }
                 else if (t[i].StartsWith("--git-dir=", StringComparison.Ordinal)) list.Add((t[i]["--git-dir=".Length..], false));
                 else if (t[i].StartsWith("--work-tree=", StringComparison.Ordinal)) list.Add((t[i]["--work-tree=".Length..], false));
-                else if (t[i] is "-c") i++;
+                else if (GitOptionTakesValue(t[i])) i++;
             }
         }
 
@@ -278,15 +279,19 @@ internal static class BashAnalysis
         index = -1;
         if (tokens.Length == 0 || Path.GetFileName(tokens[0]) != "git") return null;
         var i = 1;
-        while (i < tokens.Length && tokens[i].StartsWith('-')) i += tokens[i] is "-C" or "-c" or "--git-dir" or "--work-tree" ? 2 : 1;
+        while (i < tokens.Length && tokens[i].StartsWith('-')) i += GitOptionTakesValue(tokens[i]) ? 2 : 1;
         if (i >= tokens.Length) return null;
         index = i;
         return tokens[i];
     }
 
+    /// <summary>Globale Git-Option, deren Wert als eigenes Token folgt (<c>git.c</c>, <c>handle_options</c>).</summary>
+    public static bool GitOptionTakesValue(string token) => Array.IndexOf(GitOptionsWithValue, token) >= 0;
+
     private static string[] Strip(string[] tokens, List<string>? assignments = null, List<string>? names = null)
     {
         var i = 0;
+        var chdirs = new List<string>();
         while (i < tokens.Length)
         {
             var t = tokens[i];
@@ -294,18 +299,30 @@ internal static class BashAnalysis
             if (Array.IndexOf(Keywords, t) >= 0) { i++; continue; }
             if (Array.IndexOf(Wrappers, t) < 0) break;
             i++;
+            string? envDir = null; // env nimmt je Aufruf nur das letzte -C
             while (i < tokens.Length && tokens[i].StartsWith('-'))
             {
-                var withValue = (t == "sudo" && Array.IndexOf(SudoOptionsWithValue, tokens[i]) >= 0)
-                    || (t == "env" && Array.IndexOf(EnvOptionsWithValue, tokens[i]) >= 0)
-                    || (t == "nice" && tokens[i] == "-n");
+                var o = tokens[i];
+                if (t == "env" && o is "-C" or "--chdir" && i + 1 < tokens.Length) envDir = tokens[i + 1];
+                else if (t == "env" && o.StartsWith("--chdir=", StringComparison.Ordinal)) envDir = o["--chdir=".Length..];
+                var withValue = (t == "sudo" && Array.IndexOf(SudoOptionsWithValue, o) >= 0)
+                    || (t == "env" && Array.IndexOf(EnvOptionsWithValue, o) >= 0)
+                    || (t == "nice" && o == "-n");
                 i += withValue ? 2 : 1;
             }
 
+            if (envDir is not null) chdirs.Add(envDir);
             if (t == "timeout" && i < tokens.Length) i++; // Dauer
         }
 
-        return i >= tokens.Length ? [] : tokens[i..];
+        if (i >= tokens.Length) return [];
+        var rest = tokens[i..];
+        // env -C <dir> git … wirkt wie git -C <dir> …; so sehen die Git-Regeln das Verzeichnis (ADR-0020 Abschnitt 1).
+        if (chdirs.Count == 0 || Path.GetFileName(rest[0]) != "git") return rest;
+        var withDirs = new List<string>(rest.Length + 2 * chdirs.Count) { rest[0] };
+        foreach (var d in chdirs) { withDirs.Add("-C"); withDirs.Add(d); }
+        withDirs.AddRange(rest[1..]);
+        return [.. withDirs];
     }
 
     private static bool IsAssignment(string t)

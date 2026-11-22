@@ -25,6 +25,7 @@ public sealed class ProtectMainCheckoutTests : IDisposable
         MakeRepo(_plain);
         MakeWorktree(_main, _wt);
         MakeWorktree(_plain, _wtOfPlain);
+        Directory.CreateDirectory(Path.Combine(_wt, "src"));
     }
 
     public void Dispose()
@@ -86,6 +87,83 @@ public sealed class ProtectMainCheckoutTests : IDisposable
         Deny(cmd, _main, !cmd.StartsWith("git reset", StringComparison.Ordinal));
         Deny(cmd, Path.Combine(_main, "src"), !cmd.StartsWith("git reset", StringComparison.Ordinal));
     }
+
+    public static TheoryData<string, string> CommandsAndForms()
+    {
+        string[] commands = ["checkout dev", "switch dev", "reset HEAD~1", "merge dev", "pull", "commit -m x", "rebase dev", "stash", "stash pop", "stash -m list"];
+        string[] forms = ["cwd", "cwd-src", "cd", "-C", "--git-dir", "GIT_DIR", "--work-tree", "GIT_WORK_TREE", "--namespace", "env -C", "env --chdir"];
+        var data = new TheoryData<string, string>();
+        foreach (var c in commands)
+            foreach (var f in forms)
+                data.Add(c, f);
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(CommandsAndForms))]
+    public void Boss_table_every_listed_command_and_target_form_aimed_at_the_main_checkout_is_denied(string cmd, string form)
+    {
+        var (line, cwd) = form switch
+        {
+            "cwd" => ($"git {cmd}", _main),
+            "cwd-src" => ($"git {cmd}", Path.Combine(_main, "src")),
+            "cd" => ($"cd {_main} && git {cmd}", _wt),
+            "-C" => ($"git -C {_main} {cmd}", _wt),
+            "--git-dir" => ($"git --git-dir={_main}/.git {cmd}", _tmp),
+            "GIT_DIR" => ($"GIT_DIR={_main}/.git git {cmd}", _tmp),
+            "--work-tree" => ($"git --work-tree={_main}/src {cmd}", _tmp),
+            "GIT_WORK_TREE" => ($"GIT_WORK_TREE={_main} git {cmd}", _wt),
+            "--namespace" => ($"git --namespace x -C {_main} {cmd}", _wt),
+            "env -C" => ($"env -C {_main} git {cmd}", _wt),
+            "env --chdir" => ($"env --chdir={_main} git {cmd}", _wt),
+            _ => throw new ArgumentOutOfRangeException(nameof(form)),
+        };
+        Deny(line, cwd);
+    }
+
+    [Theory]
+    [MemberData(nameof(CommandsAndForms))]
+    public void Boss_table_the_same_forms_aimed_at_a_worktree_are_allowed(string cmd, string form)
+    {
+        var wtGitDir = Path.Combine(_main, ".git", "worktrees", "G-1");
+        var (line, cwd) = form switch
+        {
+            "cwd" => ($"git {cmd}", _wt),
+            "cwd-src" => ($"git {cmd}", Path.Combine(_wt, "src")),
+            "cd" => ($"cd {_wt} && git {cmd}", _tmp),
+            "-C" => ($"git -C {_wt} {cmd}", _main),
+            "--git-dir" => ($"git --git-dir={wtGitDir} {cmd}", _tmp),
+            "GIT_DIR" => ($"GIT_DIR={wtGitDir} git {cmd}", _tmp),
+            "--work-tree" => ($"git --work-tree={_wt}/src {cmd}", _tmp),
+            "GIT_WORK_TREE" => ($"GIT_WORK_TREE={_wt} git {cmd}", _tmp),
+            "--namespace" => ($"git --namespace x -C {_wt} {cmd}", _main),
+            "env -C" => ($"env -C {_wt} git {cmd}", _main),
+            "env --chdir" => ($"env --chdir={_wt} git {cmd}", _main),
+            _ => throw new ArgumentOutOfRangeException(nameof(form)),
+        };
+        Allow(line, cwd);
+    }
+
+    [Theory]
+    [InlineData("git --namespace x commit -m x")]
+    [InlineData("git --config-env core.editor=EDITOR commit -m x")]
+    [InlineData("git --attr-source HEAD commit -m x")]
+    [InlineData("git stash -m list")]
+    [InlineData("git stash -- show")]
+    public void Options_with_a_separate_value_and_stash_push_forms_are_denied(string cmd) => Deny(cmd, _main);
+
+    [Theory]
+    [InlineData("env -C {0} git commit -m x")]
+    [InlineData("env --chdir={0} git commit -m x")]
+    [InlineData("env --chdir {0} git commit -m x")]
+    [InlineData("env -u FOO -C {0} git commit -m x")]
+    [InlineData("env --unset FOO -C {0} git commit -m x")]
+    [InlineData("env -C /tmp -C {0} git commit -m x")]
+    [InlineData("env -C / env -C {0} git commit -m x")]
+    public void Env_chdir_into_the_main_checkout_is_denied(string template) => Deny(string.Format(template, _main), _wt);
+
+    [Fact]
+    public void Env_takes_only_the_last_chdir_of_one_call() => Deny("env -C /tmp -C . git commit -m x", _main);
 
     [Fact]
     public void Basis_git_checkout_main_in_the_main_checkout_is_denied() => Deny("git checkout main", _main);
