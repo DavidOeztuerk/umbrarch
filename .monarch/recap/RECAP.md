@@ -1,14 +1,14 @@
 # RECAP
 
 ## Stand
-- Zeitpunkt: 2026-11-19T21:34:47Z
+- Zeitpunkt: 2026-11-22T11:56:52Z
 - Plan: Pro
-- Mana 5h: 84% (Limit 90%, Reset 2026-11-20T00:40:00Z)
-- Mana 7d: 69% (Limit 96%, Reset 2026-11-25T11:00:00Z)
-- Limits: 5h 90%, 7d 96% (adaptive)
+- Mana 5h: 73% (Limit 90%, Reset 2026-11-22T13:10:00Z)
+- Mana 7d: 67% (Limit 96%, Reset 2026-11-25T11:00:00Z)
+- Limits: 5h 90%, 7d 96% (plan default)
 
 ## Aktiv
-- keine aktive Quest
+- Gate G-0130 · Quest Q-0192 [A] · Phase in_progress
 
 ## Erledigt
 - Q-0113 [A] cleared: Merge-Policy nach Zielbranch - https://github.com/DavidOeztuerk/umbrarch/pull/15 - Evidence: https://github.com/DavidOeztuerk/monarch/actions/runs/40721744761/job/122946762702, https://github.com/DavidOeztuerk/monarch/actions/runs/40721744761/job/122946762600, https://github.com/DavidOeztuerk/monarch/actions/runs/40721744761/job/122943422084, https://github.com/DavidOeztuerk/monarch/actions/runs/40721744761/job/122943425111, https://github.com/DavidOeztuerk/monarch/actions/runs/40721758194/job/122934234801, https://github.com/DavidOeztuerk/monarch/pull/15
@@ -31,9 +31,15 @@
 - Q-0150: bench/test-gate.sh erweitert, vorher rot, danach grün, deterministisch über BENCH_RESULTS_DIR: knapp unter den C1-Schwellen grün, knapp darüber rot je Klasse; Schwellen nicht über die Umgebung anhebbar; auf einem anderen Betriebssystem Exit 2; alle bestehenden Prüfungen unverändert grün
 - Q-0150: Verweise: der Kommentar zu C1 in .github/workflows/ci.yml nennt die Bedingung ruhige Maschine und den Nachtrag; docs/lessons.md bekommt einen kurzen Nachtrag; die CI-Schritte selbst ändern sich nicht
 - Q-0150: Heikle Quest nach Standardregel 3: Warden-Runde über das Design vor dem Code, kein src-Code, kein anderer Test und keine andere Schwelle aufgeweicht, Schlussrunde des Wardens mit Verdict am Head-SHA
+- Q-0192: ADR-0020 in einfacher Sprache deckt alle Teile ab: Haupt-Checkout-Schutz (Befehlsliste, Ausnahmen, Zielermittlung), Shadow-Bremse (Prüfung vor dem Start, Verweigerung im laufenden Shadow, Freshness, Default ohne Messwert), Fall „Reset erfolgt“ mit Obergrenze und Weckzeit, gate move-quest, gate cleanup, Gate-Status merged und Weg des Monarch-Stands gemergter Gates (#139)
+- Q-0192: Messung der Kosten je Shadow mit Belegen: Befehl, Ledger-Quellen, Filter (Plan Pro, ohne Überlappung, Snapshot höchstens 2 min vor Start und nach Ende), n, Median, p90 und Max je Shadow und Modell
+- Q-0192: Owner-Vorgaben nur wörtlich mit Datum und Quelle (CLAUDE.md Regel 4); alles andere als „Vorschlag“ oder „OFFEN“ markiert, Zusammenfassungen als „Zusammenfassung“
+- Q-0192: Jede Fundstelle mit Datei, Zeile und Befehl (CLAUDE.md Regel 5)
+- Q-0192: Warden-Designrunde vor dem ersten Code-Commit des Gates; höchstens eine Delta-Runde, danach ggf. schmale Prüfung nur des Fixes (Standardregel 3)
+- Q-0192: Enthält die ADR Owner-Entscheide: nach der Owner-Freigabe braucht jede Änderung eine neue Freigabe (CLAUDE.md Regel 3)
 
 ## Nächster konkreter Schritt
-G-0129 (Worktree .claude/worktrees/G-0129, PR 160, Branch monarch/G-0129-mana-grenze-arbeitsgrenze, Head 21004fe). Owner-Antworten 19.11. (verkleinerter Umfang) stehen woertlich im ADR-0012-Nachtrag; Messung als Issue 161 (v0.2); Q-0191 (ADR-0019 Zeilen 13/105/115) submitted und gepusht (Kritiker ok). Als Naechstes Q-0190 (gate_plan schon erfolgt, Scope inkl. ManaCalibrationStore.cs, McpTools.cs, plugin.json, Wrapper, wrapper-test.sh): quest accept/start, TDD gemaess ADR-0012-Nachtrag (Guard ohne Recap-Abzug in accept/mana/rest/status/MCP, Tabelle je Plan/Modell/Fenster, Plan-Aliase, Ultra ohne 5h: ToSnapshot mit Plan, last_seen, Begin/Finish, rest/Briefing ohne Epoch 0, AdaptiveLimit und Resolved.Recaps entfernt, system.yaml work_until_pct fuer alle Modelle, Eintraege je Modell, Gueltigkeit 0..100, awaken ohne work_until_pct und clamp, Version 0.1.2), alle alten Tests mit altem/neuem Wert und Grund im PR, Kritiker, Commit, PR-Text, Warden-Schlussrunde (Design und Code, Opus), gate verdict, gate merge, gate check, evidence sync je Quest (Q-0189, Q-0190, Q-0191), Aufraeumen. PR 152 nicht anfassen. Schlussbericht mit Owner-Befehlen: pull, install-local, Neustart, system.yaml Zeilen 8-9 (work_until_pct entfernen), Fable-Lesart bei Pro (Opus-Wert) als Frage.
+G-0130 (Worktree .claude/worktrees/G-0130, Branch monarch/G-0130-selbst-aufraeumen, PR 163, Head 7000398). Q-0192 aktiv (Design ADR-0020). Warden-Designrunde 1 = changes (6 major, Kommentar issuecomment-7078646801); alle 6 major im Delta 7000398 behoben, Kritiker-Befunde behoben. Als Naechstes: Warden-Delta-Runde (Opus) nur ueber das Delta 9c088b0..7000398 gegen die 6 major; bei approve gate-unabhaengig weiter mit Q-0193 (Knight, TDD rot zuerst), dann Q-0194..Q-0198 nacheinander. minor-Befunde 7-18 der Runde 1 kommen ins Issue Nacharbeit G-0130. Reibung bisher: Deny Klassifizierer (Skript mit zerstueckeltem Pfad, sleep-Logger), Scope-Lock auf Scratchpad nach quest start (3x), Fehlalarm for-Schleife ueber .monarch/quests, Isolation lehnt Inline-Python ab. Owner-Fragen fuer den Bericht: Offen 1-3 im ADR, RecapAndStop nach 10 min als Verhaltensaenderung, untracked Ledger-Dateien (Optionen).
 
 ## Offene Entscheidungen
 - Owner: historische docs (ADR-0001..0018, lessons, evidence) bleiben? Default ja (Vorschlag)
