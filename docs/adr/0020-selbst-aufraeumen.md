@@ -3,7 +3,8 @@
 - Status: Vorgeschlagen (Warden-Designrunde ausstehend)
 - Datum: 2026-11-22
 - Gate: G-0130, Quests Q-0192 bis Q-0198
-- Bezug: #46, #161, #74, #139, #16, #81, #44, #36, ADR-0004, ADR-0007, ADR-0008, ADR-0011, ADR-0012
+- Bezug: #46, #161, #74, #139, #16, #81, #44, #36, ADR-0003, ADR-0004, ADR-0007, ADR-0008, ADR-0010, ADR-0011, ADR-0012, ADR-0015, ADR-0018, ADR-0019
+- Fassung: Delta nach Warden-Designrunde 1 (PR #163, Kommentar `#issuecomment-7078646801`)
 
 ## Owner-Vorgaben
 
@@ -22,7 +23,7 @@ Alles Weitere in diesem Dokument ist technisches Design der Session. Wo es über
 
 1. **Haupt-Checkout:** Im Hauptordner eines Projekts mit Monarch lehnt der Hook acht schreibende Git-Befehle ab. Gearbeitet wird nur in der Gate-Worktree. Neue Worktrees anlegen geht weiter.
 2. **Mana bei Shadows:** Vor dem Start eines Shadows prüft der Hook, ob dessen typische Kosten noch unter die Grenze passen. Die Kosten sind aus den Ledgern gemessen. Erreicht ein laufender Shadow die Grenze, bekommt er keine Werkzeuge mehr und meldet seinen Stand als unvollständig. Ohne frischen Stand (headless) bremst nur der letzte bekannte Wert.
-3. **Nach dem Reset:** Zeigt der Stand ein Fenster, das schon zurückgesetzt ist, sagt Monarch „Reset erfolgt, Stand wird erneuert“. Die Session prüft dann jede Minute neu, höchstens 10 Minuten lang (Vorschlag). Der Weckruf kommt eine Minute nach dem Reset statt nach drei (selten zwei, wegen der Jitter-Minuten).
+3. **Nach dem Reset:** Zeigt der Stand ein Fenster, das schon zurückgesetzt ist, sagt Monarch „Reset erfolgt, Stand wird erneuert“. Die Session prüft dann jede Minute neu, höchstens 10 Minuten lang (Vorschlag). Der Weckruf kommt eine Minute nach dem Reset (selten zwei, wegen der Jitter-Minuten) statt nach drei.
 4. **Status auf develop:** develop nimmt keinen Commit ohne grüne Pflicht-Checks an. Der Stand nach dem Merge kommt darum erst mit dem nächsten Gate nach develop: Ein neuer Befehl holt ihn in die neue Worktree (Vorschlag, Offen 2).
 5. **Quest verschieben:** Ein Befehl hängt eine Quest in ein anderes Gate um, in beiden Gate-Dateien und in der Quest-Datei, und schreibt das ins Ledger.
 6. **Aufräumen:** Ein Befehl erledigt das Aufräumen nach dem Merge: committen, pushen, Worktree entfernen, ohne `--force`.
@@ -31,7 +32,12 @@ Alles Weitere in diesem Dokument ist technisches Design der Session. Wo es über
 
 **Was zählt.** Ein Bash-Segment mit dem Wort `git` und einem dieser Unterbefehle: `checkout`, `switch`, `reset`, `merge`, `pull`, `commit`, `rebase`, `stash`. Den Unterbefehl bestimmt `BashAnalysis.GitSubcommand` wie bei `protect_branches`; globale Optionen wie `-c` oder `--no-pager` davor zählen nicht. `git stash list` und `git stash show` lesen nur und zählen nicht (Vorschlag: Lesart von „schreibende Git-Befehle“).
 
-**Wo der Befehl läuft.** Die Verzeichnisse vor dem Segment (cwd, `cd`, `pushd`, `popd` aus dem cwd-Modell), danach jedes `-C <dir>` der Reihe nach. Grundlage ist die Ermittlung von `FindRepos` in `ProtectBranchesRule.cs:205-245`: cwd-Modell, `-C`, `--git-dir` im eigenen Segment und `GIT_DIR` aus jedem Segment, Repo je Basis über `BranchGuard.FindGitDir`. Erweiterung gegenüber `FindRepos` (Vorschlag): `--work-tree` und `GIT_WORK_TREE` zählen ebenfalls. `FindRepos` überspringt `--work-tree` (`:69`) und liest `GIT_WORK_TREE` nicht. Statt der Suche wird dann der genannte Arbeitsbaum geprüft.
+**Wo der Befehl läuft.** Die Verzeichnisse vor dem Segment (cwd, `cd`, `pushd`, `popd` aus dem cwd-Modell), danach jedes `-C <dir>` der Reihe nach. Die Regel prüft eine Vereinigung von Kandidaten und verweigert, sobald einer davon ein Haupt-Checkout ist:
+- das Git-Verzeichnis je Basis über `BranchGuard.FindGitDir`, mit den Basen aus dem cwd-Modell (cwd, `cd`, `pushd`, `popd`) und danach jedem `-C <dir>` der Reihe nach;
+- jedes ausdrückliche Git-Verzeichnis aus `--git-dir` im Segment oder `GIT_DIR` aus irgendeinem Segment;
+- jeden ausdrücklichen Arbeitsbaum aus `--work-tree` im Segment oder `GIT_WORK_TREE` aus irgendeinem Segment.
+
+Anders als `FindRepos` (`ProtectBranchesRule.cs:205-245`, dort ersetzt ein `GIT_DIR` die Suche, `:226-241`) ersetzt hier kein Kandidat einen anderen. So bleibt `git --work-tree=/tmp/x checkout main` im Haupt-Checkout ein Deny, denn Git nimmt das Git-Verzeichnis dann aus dem cwd. Dasselbe gilt für `GIT_DIR=/tmp/y/.git git status; git checkout main`. Folge der Vereinigung: Ein Befehl mit `GIT_DIR` einer Worktree, aber cwd im Haupt-Checkout, wird ebenfalls verweigert (streng).
 
 **Was ein Haupt-Checkout ist.** Das gefundene Git-Verzeichnis heißt `.git`, ist ein Verzeichnis und hat keine Datei `commondir`, ist also kein verknüpfter Worktree. Der Ordner darüber enthält ein Verzeichnis `.monarch` (erwecktes Projekt). Für `--work-tree`: Der Arbeitsbaum enthält ein Verzeichnis `.git` und ein Verzeichnis `.monarch`. Ein Worktree unter `.claude/worktrees/` hat eine `.git`-Datei. Sein Git-Verzeichnis liegt unter `.git/worktrees/<name>` und zählt nie.
 
@@ -39,7 +45,12 @@ Alles Weitere in diesem Dokument ist technisches Design der Session. Wo es über
 
 **Ausnahme.** `git worktree add` zählt nicht, weil `worktree` nicht in der Liste steht. Dasselbe gilt für die anderen `worktree`-Unterbefehle (`list`, `remove`, `prune`). `worktree remove` braucht das Aufräumen (Abschnitt 6).
 
-**Was die Regel nicht prüft (Grenzen nach ADR-0011).** Git ohne das Wort `git` im Segment (Alias, Wrapper-Skript, `sh -c "…"`, `xargs git`) und Pfade aus Variablen oder `$(…)`, die das cwd-Modell nicht auflöst. Andere schreibende Git-Befehle (`add`, `restore`, `clean`, `cherry-pick`, `revert`, `am`, `apply`, `mv`, `rm`, `branch -f`, `tag`, `update-ref`) stehen nicht in der Liste des Owners und sind nicht gesperrt (Offen 1).
+**Was die Regel nicht prüft (Grenzen nach ADR-0011).** Git ohne das Wort `git` in einem erkannten Segment (Alias, Wrapper-Skript, `xargs git`) und Pfade aus Variablen oder `$(…)`, die das cwd-Modell nicht auflöst. Den Inhalt von `sh -c "…"` zerlegt `BashAnalysis` schon heute in Segmente (`BashAnalysis.cs:93-98`); er wird also geprüft.
+
+**Weitere Folgen.**
+- Test-Repos mit einem Ordner `.monarch` gelten als erweckte Projekte. Ein Agent kann dort im Haupt-Checkout nicht mehr committen. Auch `git checkout -f -- <Pfad>` geht nicht mehr, obwohl `plugin/agents/knight.md:20` und `warden.md:19` es in Test-Repos erlauben. Für den Warden ist nur das Letzte neu, `git commit` verweigert ihm der Hook schon heute (`ToolCallPolicy.cs:455-462`). Policy-Fälle laufen ohnehin als Repo-Tests (Owner 16.11.2026). Die Texte der Agenten passen das Issue „Nacharbeit G-0130“ an.
+- Der erste Commit nach `awaken` in einem neuen Projekt liegt im Haupt-Checkout. Ihn macht der Owner selbst, oder die Session legt zuerst eine Worktree an.
+- `~/.monarch` ist kein Git-Repo und kein erwecktes Projekt; die Regel trifft es nicht. Andere schreibende Git-Befehle (`add`, `restore`, `clean`, `cherry-pick`, `revert`, `am`, `apply`, `mv`, `rm`, `branch -f`, `tag`, `update-ref`) stehen nicht in der Liste des Owners und sind nicht gesperrt (Offen 1).
 
 **Tests.** Q-0193 beginnt mit einem roten Test (Vorgabe „Roter Test zuerst“): `git checkout main` im Haupt-Checkout eines erweckten Testprojekts wird heute erlaubt.
 
@@ -53,24 +64,25 @@ Quelle: alle Ledger-Zeilen aus umbrarch, Noelia und workertransfer, aus den Arbe
 
 Das Modell eines Shadows steht nicht im Ledger. Die Zuordnung kommt aus den heutigen Agent-Definitionen (`plugin/agents/*.md` Zeile 4, unverändert seit Commit `a5b3cd2` vom 28.10.2026). Läufe mit anderem Modell per `model`-Parameter wären falsch zugeordnet (Annahme).
 
-So rechnet das Skript:
+Kriterien (verbindlich auch für `tools/shadow-costs.py`):
 - Ein Shadow-Lauf beginnt mit dem ersten `ToolUsed` oder `PolicyDecided` seiner `agent_id` und endet mit `ShadowRunCompleted`.
 - Gemessen wird `fiveHourUsedPct` zwischen dem letzten frischen `ManaSnapshotTaken` vor dem Start und dem ersten frischen nach dem Ende, beide im selben 5h-Fenster.
 - Ein Lauf zählt nur, wenn alle folgenden Bedingungen gelten:
-  - Beide Abstände (Snapshot bis Start, Ende bis Snapshot) sind auf ganze Minuten gerundet höchstens 2, also unter 2,5 Minuten.
-  - Kein anderer Shadow-Lauf desselben Projekts überlappt.
-  - Kein anderer Lauf desselben Projekts hat dieselben Werte vorher, nachher und Differenz (Ersatz für „dasselbe Messpaar“).
+  - Beide Abstände (Snapshot bis Start, Ende bis Snapshot) sind höchstens 2 Minuten, ungerundet.
+  - Kein anderer Shadow-Lauf überlappt.
+  - Kein anderer Lauf nutzt dasselbe Messpaar.
   - Die 7d-Differenz ist nicht negativ, es lag also kein Wochen-Reset dazwischen.
-- Ergebnis: 104 Läufe ohne Überlappung haben ein Messpaar, 28 davon zählen.
 
-Varianten ändern die genutzten Werte nicht. Mit Snapshot-Identität statt Wertegleichheit zählt ein Warden-Lauf mehr (n=15, Median 13). Ohne den 7d-Filter zählt noch einer (n=16, Median 12,5). p90 21, Max 36 und 7d-p90 3 bleiben in beiden Fällen gleich. Bei den 28 Läufen gibt es auch keine Überlappung über Projekte hinweg.
+Ergebnis (Nachrechnung der Warden-Designrunde 1 mit ungerundeten Abständen, PR-Kommentar `#issuecomment-7078646801`, Befund 3):
 
 | Shadow (Modell laut `plugin/agents/*.md`) | n | 5h Median | 5h p90 | 5h Max | 7d p90 |
 |---|---|---|---|---|---|
-| warden (opus) | 14 | 11,5 | 21 | 36 | 3 |
-| knight (sonnet) | 11 | 5 | 12 | 19 | 1 |
-| strategist (opus) | 1 | 20 | – | 20 | – |
-| scout (sonnet) | 2 | 3,5 | – | 5 | – |
+| warden (opus) | 13 | 10 | 18 | 36 | 3 |
+| knight (sonnet) | 9 | 5 | 8 | 19 | 1 |
+| scout (sonnet) | 1 | – | – | – | – |
+| strategist (opus) | 0 | – | – | – | – |
+
+Die erste Auswertung der Session hatte die Abstände auf ganze Minuten gerundet (bis unter 2,5 Minuten) und kam auf 28 Läufe (warden n=14, p90 21; knight n=11, p90 12). Fünf dieser Läufe liegen ungerundet über 2 Minuten. Es gilt die strenge Fassung oben. Q-0194 wiederholt die Rechnung im Repo; weicht das Skript ab, gilt seine Tabelle, und der ADR wird in einer schmalen Prüfung angepasst.
 
 Für kritiker und fremde Agenten (`general-purpose` u. a.) gibt es keinen sauberen Lauf.
 
@@ -78,29 +90,38 @@ Für kritiker und fremde Agenten (`general-purpose` u. a.) gibt es keinen sauber
 
 ### (a) Prüfung vor dem Start
 
-- Der PreToolUse-Matcher erfasst alle Werkzeuge (`*` statt der Liste in `plugin/hooks/hooks.json:16`), damit der Hook das Agent-Werkzeug sieht und die Bremse in (b) jedes weitere Werkzeug erfasst (Vorschlag). Folge: Auch Glob, TodoWrite, WebFetch und andere rufen den Hook auf. Für sie greift keine bisherige Regel, es kommt also nur der Prozessstart dazu. Der Hook liest `tool_input.subagent_type` und `tool_input.model`.
-- **Modellklasse des Shadows:** `tool_input.model`, sonst das Modell aus der Agent-Definition für die Umbrarch-Agenten (warden, kritiker, strategist: opus; knight, scout: sonnet; ein Test gleicht das mit `plugin/agents/*.md` ab), sonst das Modell der Session aus `mana.json`, sonst Opus (`ModelClasses.Of`).
-- **Erwartete Kosten (5h, 7d):** warden/opus 21 und 3, knight/sonnet 12 und 1. Für jede andere Kombination gilt der konservative Default 21 und 3, der höchste belegte p90. Vorschlag: p90, und einen eigenen Wert nur ab n ≥ 5. Begründung mit dem Fall aus der Sammlung 6b (Noelia, 21.11.2026, `cli-20261121.e68aa931.jsonl` seq 5 um 00:49:04 mit 77 %, seq 6 um 01:11:40 mit 95 %): Der Warden startete bei 77 % (Grenze 90, Noelia `.monarch/system.yaml:8`). Mit dem Median (11,5) hätte der Hook ihn gestartet (88,5 %), er endete bei 95 %. Mit p90 (21) verweigert der Hook (98 %).
-- **Entscheidung:** `ManaGuard.Decide(Snapshot, Kosten, Grenzen)` mit den Grenzen der Session-Modellklasse (`ManaSupport.LimitClass`, wie bei `quest accept`). Alles außer Proceed wird ein Deny für den Agent-Aufruf, mit dem Grund aus dem Guard („passt nicht“, „Reset in unter 10 Minuten“ oder „Reset erfolgt“, Abschnitt 3). Ohne Snapshot gibt es kein Deny, wie bei `quest accept`.
-- **Ledger:** Jeder Agent-Aufruf schreibt `ShadowStarted` (agent_type, model_class, est_5h, est_7d, five_hour_used_pct, stale, decision). Damit kennt die nächste Messung das Modell genau.
+- **Matcher (Vorschlag):** Der PreToolUse-Matcher in `plugin/hooks/hooks.json:16` bekommt `Agent|Task|Glob|WebFetch|WebSearch` dazu. Damit sieht der Hook den Start eines Shadows, und die Bremse in (b) erfasst alle Werkzeuge, die Arbeit kosten. Bewusst nicht erfasst bleibt das Übergabe-Werkzeug des Subagenten (in dieser Umgebung `SubagentHandback`): Nur darüber erreicht der unvollständige Stand die Hauptsession, auch der hook_error-Pfad darf es nicht sperren. Ebenso nicht erfasst bleiben reine UI-Werkzeuge wie TodoWrite. Für Glob, WebFetch, WebSearch, Agent und Task greift heute keine Regel. Ein Test belegt, dass sie ohne Mana-Befund erlaubt bleiben.
+- **Erkennen des Shadows:** Werkzeugname `Agent` oder `Task`. `tool_input.subagent_type` zählt nur mit dem Teil nach dem letzten `:` (wie `ToolCallPolicy.AgentName`). `tool_input.model` darf `opus`, `sonnet`, `haiku`, eine volle Modell-ID oder `inherit` sein. Die neuen Felder liest der Hook nachsichtig (`JsonElement`): Ein Wert, der kein Text ist, zählt als fehlend und löst keinen hook_error aus.
+- **Modellklasse des Shadows:** `tool_input.model` (Familie aus dem Namen; `inherit` zählt als fehlend), sonst das Modell aus der Agent-Definition für die Umbrarch-Agenten (warden, kritiker, strategist: opus; knight, scout: sonnet; ein Test gleicht das mit `plugin/agents/*.md` ab), sonst das Modell der Session aus `mana.json`, sonst Opus (`ModelClasses.Of`).
+- **Erwartete Kosten (5h, 7d):** warden/opus 18 und 3, knight/sonnet 8 und 1. Für jede andere Kombination gilt der konservative Default 18 und 3, der höchste belegte p90. Vorschlag: p90, und einen eigenen Wert nur ab n ≥ 5. Begründung mit dem Fall aus der Sammlung 6b (Noelia, 21.11.2026, `cli-20261121.e68aa931.jsonl` seq 5 um 00:49:04 mit 77 %, seq 6 um 01:11:40 mit 95 %): Der Warden startete bei 77 % (Grenze 90, Noelia `.monarch/system.yaml:8`). Mit dem Median (10) hätte der Hook ihn gestartet (87 %), er endete bei 95 %. Mit p90 (18) verweigert der Hook (95 %).
+- **Plan:** Gemessen ist nur Plan Pro. Für Max und Ultra sind die Prozentwerte je Lauf kleiner (größeres Fenster); die Pro-Werte gelten dort als obere Schranke (Vorschlag). Beim API-Key gilt die Tabelle ebenso.
+- **Entscheidung:** `ManaGuard.Decide(Snapshot, Kosten, Grenzen)` mit den Grenzen der Session-Modellklasse (`ManaSupport.LimitClass` wie bei `quest accept`, `QuestCommands.cs:74`; die `session_id` kommt aus der Hook-Eingabe, wie beim Briefing, `HookRunner.cs:435`). Alles außer Proceed wird ein Deny für den Agent-Aufruf mit Regel `mana_shadow_start`, mit dem Grund aus dem Guard („passt nicht“, „Reset in unter 10 Minuten“ oder „Reset erfolgt“, Abschnitt 3). Ohne Snapshot gibt es kein Deny, wie bei `quest accept` (Vorschlag).
+- **Ort:** Beide Mana-Prüfungen laufen einmal je Aufruf im HookRunner, nicht je Projekt in `ToolCallPolicy`. Ihr Ergebnis wird mit den Policy-Ergebnissen kombiniert (Deny vor Ask vor Allow) und einmal im Ledger des nächsten Projekts (`primary`) protokolliert.
+- **Ledger:** Jeder Agent-Aufruf schreibt `ShadowStarted` (agent_type, model_class, est_5h, est_7d, five_hour_used_pct, stale, decision). Eine `agent_id` gibt es vor dem Start noch nicht; die nächste Messung ordnet `ShadowStarted` dem folgenden Lauf desselben Typs zu.
+- **Grenze:** Laufen schon andere Shadows (parallel oder im Hintergrund), zählt der Hook deren restliche Kosten nicht dazu. Er sieht nur den Stand, den sie bis dahin verbraucht haben.
 - **Nicht in diesem Gate (Vorschlag):** laufende Neuberechnung der Tabelle aus neuen Läufen. Die Tabelle steht fest im Code und verweist auf diesen ADR. Eine neue Messung mit `tools/shadow-costs.py` ersetzt sie (Offen 3).
 
 ### (b) Bremse im laufenden Shadow
 
-- Jeder PreToolUse-Aufruf mit nicht leerer `agent_id` liest den Snapshot. Deny mit Regel `mana_brake`, wenn das 5h-Fenster noch nicht zurückgesetzt ist (`resets_at` > jetzt) und `Effective5h ≥ Grenze 5h` gilt, oder wenn `Effective7d ≥ Grenze 7d` gilt. Grund: „Mana-Grenze erreicht (5h x %, Grenze y %). Stoppe und melde deinen Stand als unvollständig an die Hauptsession.“
+- Jeder PreToolUse-Aufruf mit nicht leerer `agent_id` liest den Snapshot. Deny mit Regel `mana_brake`, wenn für ein Fenster, das laut Snapshot noch nicht zurückgesetzt ist (`resets_at` > jetzt), gilt: Stand ≥ Grenze (5h: `Effective5h`, 7d: `Effective7d`). Grenzen der Session-Modellklasse wie in (a). Grund: „Mana-Grenze erreicht (5h x %, Grenze y %). Stoppe und melde deinen Stand als unvollständig an die Hauptsession.“
 - Vorschlag (Lesart von „ab der Grenze“): kein Schrittaufschlag, der Vergleich ist „Stand ≥ Grenze“.
 - Vorschlag: Ein Wert aus einem schon zurückgesetzten Fenster zählt nicht, weil er den alten Verbrauch zeigt. Ohne Snapshot gibt es kein Deny, wie bei `quest accept`.
 - Die Hauptsession bremst der Guard wie bisher über `mana --estimate`. Die Bremse gilt nur für Shadows.
 - **Grenzen:** Ohne Statusline (headless, `claude -p`) wird `mana.json` nicht frisch; dann bremst nur der letzte bekannte Wert.
-- **Latenz:** Pro Shadow-Werkzeug kommt ein Lesen von `mana.json` dazu (eine kleine Datei). Die Szenarien des Latenz-Gates laufen ohne `agent_id` und ändern sich nicht. Die Warden-Runde prüft das.
+- **Latenz:** Pro Shadow-Werkzeug kommt ein Lesen von `mana.json` dazu (eine kleine Datei). Die Szenarien des Latenz-Gates laufen ohne `agent_id` und ändern sich nicht. Ein Szenario mit `agent_id` fehlt dem Latenz-Gate; es kommt ins Issue „Nacharbeit G-0130“.
 
 ## 3. „Reset erfolgt, Stand wird erneuert“
 
-- Neuer Fall `ManaDecision.ResetPending`. Er gilt, wenn der Schritt nicht passt, das maßgebliche Fenster (5h, ohne 5h die Woche) laut Snapshot zurückgesetzt ist (`resets_at` ≤ jetzt) und seitdem weniger als 10 Minuten vergangen sind. Vorschlag für die Obergrenze: `ManaStore.StaleAfter` (10 Minuten, ADR-0004), keine neue Zahl. Die Vorgabe des Owners nennt keinen Wert.
-- Danach gilt wieder RecapAndStop mit dem bestehenden Hinweis „Stand veraltet, interaktive Session öffnen“ (`QuestCommands.cs:81`, #87).
+- **Heute** liefert `ManaGuard.Decide` für ein schon zurückgesetztes Fenster PauseWithoutRecap, nicht RecapAndStop: `reset - clock` ist negativ und damit unter 10 Minuten (`ManaPolicy.cs:42-43`, Testkommentar `tests/Monarch.Cli.Tests/ManaLimitTests.cs:170`). Die Vorgabe des Owners („statt RecapAndStop“) geht von RecapAndStop aus. Das Design ersetzt den heutigen Fall, egal wie er heißt.
+- **Neue Reihenfolge in `Decide`:**
+  1. Der Schritt passt in jedes vorhandene Fenster: Proceed.
+  2. Ein Fenster, das nicht passt, ist laut Snapshot zurückgesetzt (`resets_at` ≤ jetzt): Seit dem Reset sind weniger als 10 Minuten vergangen, dann neuer Fall `ResetPending`. Sonst RecapAndStop mit dem bestehenden Hinweis „Stand veraltet, interaktive Session öffnen“ (`QuestCommands.cs:81`, #87).
+  3. Der Reset des maßgeblichen Fensters (5h, ohne 5h die Woche) liegt in weniger als 10 Minuten: PauseWithoutRecap.
+  4. Sonst RecapAndStop.
+- Vorschlag für die Obergrenze: `ManaStore.StaleAfter` (10 Minuten, ADR-0004), keine neue Zahl. Die Vorgabe des Owners nennt keinen Wert. Vorschlag für die Zeit danach: RecapAndStop statt heute PauseWithoutRecap. Das ist eine Verhaltensänderung: Kommt nach 10 Minuten kein frischer Stand (etwa ohne Statusline), sichert die Session ihren Stand im Recap, statt ohne Recap zu pausieren.
 - Die Meldung ist überall gleich. Der erste Satz ist der Wortlaut des Owners, der Rest ist ein Vorschlag: „Reset erfolgt, Stand wird erneuert. Erneut prüfen ab HH:MM UTC (in 1 Minute), letzte Prüfung bis HH:MM UTC.“ Sie steht in `mana --estimate`, in der Ablehnung von `quest accept`, in `status`, in `mana_forecast` und im Hook vor einem Shadow-Start.
 - Die Session wartet eine Minute und prüft erneut, bis Proceed kommt oder die Obergrenze erreicht ist. Wie sie wartet, regelt der Mana-Skill (Q-0198).
-- `WakePlan.Slack` wird 1 Minute statt 3. Die Nachfrist des Außen-Jobs (3 Minuten) bleibt. Vorschlag: Auch die Regel gegen die lokalen Minuten :00 und :30 bleibt (ADR-0008, Jitter von CronCreate). Bei einem Reset auf :59 oder :29 rückt der Weckruf damit eine Minute weiter, auf Reset + 2 Minuten.
+- `WakePlan.Slack` wird 1 Minute statt 3. Die Nachfrist des Außen-Jobs (3 Minuten) bleibt. Liegt `resets_at` beim Aufruf von `monarch rest` schon zurück, ist die Weckzeit jetzt + 1 Minute statt einer Zeit in der Vergangenheit (Vorschlag). `WakePlan.ResetsAt(wake) = wake − Slack` bleibt eine Näherung; mit dem Ersatzfall und den Jitter-Minuten trifft sie den Reset nicht genau, das ändert nichts an der Zeitprüfung. Vorschlag: Auch die Regel gegen die lokalen Minuten :00 und :30 bleibt (ADR-0008, Jitter von CronCreate). Bei einem Reset auf :59 oder :29 rückt der Weckruf damit eine Minute weiter, auf Reset + 2 Minuten.
 
 ## 4. Status nach dem Merge
 
@@ -108,13 +129,15 @@ Für kritiker und fremde Agenten (`general-purpose` u. a.) gibt es keinen sauber
 
 **Design (Vorschlag).** Es erfüllt Vorgabe 4 mit Verzögerung: Der Stand nach dem Merge kommt mit dem nächsten Gate auf develop, nicht sofort (Offen 2).
 - `gate merge` setzt nach `GateMerged` den Gate-Status in der Worktree auf `merged`. Er kommt mit dem Aufräum-Commit auf den Gate-Branch.
-- Neuer Befehl `monarch gate carry` (nur Main), in der neuen Gate-Worktree. Er sucht unter `origin/monarch/G-*` die Gates, deren Gate-Datei am Branch-Ende `merged` zeigt und deren Stand in der Worktree älter ist. Je solches Gate übernimmt er die Gate-Datei, die Quest-Dateien dieses Gates und die Ledger-Dateien vom Branch-Ende. Ledger-Dateien übernimmt er nur, wenn sie in der Worktree fehlen oder die Worktree-Fassung ein Anfang der Branch-Fassung ist. Sonst überspringt er die Datei und nennt sie. Ereignis `GateStatusCarried` (gate, files, skipped). Die Session committet das mit ihrem ersten Commit; develop bekommt den Stand mit dem nächsten Merge.
+- Neuer Befehl `monarch gate carry` (nur Main), in der neuen Gate-Worktree. Er sucht unter `origin/monarch/G-*` die Gates, deren Gate-Datei am Branch-Ende `state: merged` zeigt, während die Gate-Datei in der Worktree einen anderen Status hat („älter“). Je solches Gate übernimmt er nur das Feld `state`: in der Gate-Datei und in den Quest-Dateien, die in der Worktree zu diesem Gate gehören (`gate:` gleich, in der Quest-Liste des Gates). Übernommen wird nur ein gültiger Statuswert (`BoardNames`). Alle anderen Felder und alle anderen Dateien bleiben unverändert.
+- Ledger-Dateien übernimmt `carry` nicht. Sie gehören je zu einer Worktree (Writer-ID im Dateinamen, `JsonlLedgerStore.cs:9`). In einer neuen Worktree wären sie fremd, und ein normaler Commit damit wäre nach ADR-0018 §3 ein `UnanchoredCommit` (`LedgerHistory.cs:166-176`), den `ledger verify`, `gate merge`, `quest clear` und `evidence sync` verweigern. Die Vorgabe nennt nur Gate- und Quest-Dateien. Der Hinweis „no GateMerged“ von `evidence sync` (#139) bleibt deshalb bestehen.
+- Vertrauen: Der Gate-Branch auf origin ist kein vertrauenswürdiger Stand (ADR-0018 §2). Deshalb übernimmt `carry` nur Statuswerte, und nur für Gates, die in der Worktree schon existieren. Ereignis `GateStatusCarried` (gate, quests, from_ref). Wiederholt ist der Befehl ohne Wirkung. Die Session committet das Ergebnis mit ihrem ersten Commit; develop bekommt den Stand mit dem nächsten Merge.
 - Folge: Zwischen zwei Gates zeigt develop den alten Stand. Die Alternative ist ein Status-Commit direkt auf develop, und der braucht eine Ausnahme im Branchschutz (Offen 2).
 
 ## 5. gate move-quest
 
-- `monarch gate move-quest <Q> --to <G>` (nur Main). Vorschlag für die Ablehnungsgründe: Ablehnung, wenn die Quest oder das Ziel-Gate fehlt, Quelle und Ziel gleich sind, die Quest aktiv ist (`active.json`) oder einen PR hat (Status `in_review`, `verified`, `cleared`).
-- Ein Schritt: alte Gate-Liste ohne Q, neue Gate-Liste mit Q, `gate:` in der Quest-Datei, dann `QuestMoved` (quest, from, to). Geschrieben wird atomar je Datei, in der Reihenfolge Ziel-Gate, Quelle, Quest.
+- `monarch gate move-quest <Q> --to <G>` (nur Main), in der Worktree des Gates. Vorschlag für die Ablehnungsgründe: Ablehnung, wenn die Quest oder das Ziel-Gate fehlt, Quelle und Ziel gleich sind, die Quest aktiv ist (`active.json`) oder einen anderen Status als `proposed` oder `accepted` hat.
+- Ein Schritt: alte Gate-Liste ohne Q, neue Gate-Liste mit Q, `gate:` in der Quest-Datei, dann `QuestMoved` (quest, from, to). Geschrieben wird atomar je Datei, in der Reihenfolge Ziel-Gate, Quelle, Quest. Jeder Schritt setzt einen Zielzustand. Bricht der Befehl ab, stellt ein zweiter Aufruf den Rest her. Steht alles schon am Ziel, meldet er „schon verschoben“ und schreibt kein Ereignis.
 - `gate_plan`: Steht eine geplante Quest schon in einem anderen Gate (ersetzbar ist nur `proposed`), wird sie aus dessen Liste entfernt und `QuestMoved` geschrieben.
 
 ## 6. gate cleanup
@@ -123,15 +146,20 @@ Für kritiker und fremde Agenten (`general-purpose` u. a.) gibt es keinen sauber
 - Ablehnung, wenn das cwd in der Worktree liegt (der Hook würde dort weiter Ledger-Zeilen schreiben), wenn `ledger verify` in der Worktree Befunde hat oder wenn für das Gate nach dem letzten `GateMerged` kein `IntegrationRunChecked` mit `green` vorliegt (Standardregel 2, Schritt 1). Ohne `GateMerged` kommt so nie ein `[skip ci]` vor dem Merge auf den Branch.
 - Ablauf, alles per `git -C`: `GateCleanedUp` in die Worktree schreiben, `git -C <wt> add .monarch`, `git -C <wt> commit -m "<G>: Monarch-Stand nach Merge [skip ci]"` (der pre-commit-Hook läuft; schlägt er an, stoppt der Befehl und meldet den Fund), `git -C <wt> push origin monarch/<G>-…` (ausdrücklicher Refspec, nur der Gate-Branch), `git -C <haupt> worktree remove <wt>` ohne `--force`.
 - Verweigert git das Entfernen, nennt Monarch Grund und Dateien (`git -C <wt> status --porcelain`) und endet mit Exit 1. Kein Text schlägt `--force` vor.
+- Fehlerpfade (Vorschlag): Scheitert der Commit (etwa am pre-commit-Hook), wird nichts gepusht und nichts entfernt. Scheitert der Push, wird nichts entfernt. Ein zweiter Aufruf setzt fort: Ohne neue Änderungen entfällt der Commit, der Push ist ohne Wirkung, wenn origin schon auf dem Stand ist. `git add` nimmt nur `.monarch` (Vorschlag), weil nach dem Merge nur der Monarch-Stand offen sein darf; andere Änderungen lassen `worktree remove` scheitern, und Monarch nennt sie.
+
+## Nur durch den Main
+
+`gate cleanup`, `gate carry` und `gate move-quest` verweigert der Hook jedem Shadow, wie heute `gate merge|verdict|check` (`ProtectBranchesRule.cs:41-56`). Die Liste in `GateOnlyMain` bekommt die drei Unterbefehle dazu (Q-0197).
 - Der Bash-Aufruf selbst läuft im Haupt-Checkout. Seine Hook-Zeilen landen dort (bestehende Lücke: untracked Ledger-Dateien im Haupt-Checkout).
 
 ## 7. Merge-Methode je Repo
 
-Schon umgesetzt: `src/Monarch.Cli/MergeMethodResolver.cs:24-33` (Konfiguration `git.merge_method`, sonst Ableitung aus der Historie), ADR-0007 Nachtrag Q-0140, Issue #48 geschlossen. Keine Änderung.
+Schon umgesetzt: `src/Monarch.Cli/MergeMethodResolver.cs:25-34` (Konfiguration `git.merge_method`, sonst Ableitung aus der Historie), ADR-0007 Nachtrag Q-0140, Issue #48 geschlossen. Keine Änderung.
 
 ## 8. Fremder Agent statt Shadow
 
-Befund ohne Umbau: Der Hook behandelt einen `general-purpose`-Agenten wie jeden Shadow, aber nicht wie einen read-only Shadow. Scope-Lock, geschützte Pfade, Secrets, deny_bash und Rank gelten für jeden Aufrufer gleich (`ToolCallPolicy.cs:55-70`). Ask→Deny gilt für jeden Subagenten, also bei nicht leerer `agent_id` (`HookRunner.cs:23-38`, Bedingung in `:27`). `gate merge|verdict|check` und `wake schedule|cancel|fire` verweigert der Hook jedem Agenten (`ProtectBranchesRule.cs:41-56`, Bedingung `call.AgentType` nicht leer in `:20`). Die read-only-Regel greift nur für `warden` und `scout` (`ToolCallTypes.cs:104`, `read_only_shadows` in `.monarch/system.yaml`). Außer der read-only-Liste (`ToolCallPolicy.cs:455-462`) prüft keine Regel den Agenten beim Schreiben, und keine prüft das Modell. Ein fremder Agent schreibt also im Quest-Scope genauso wie ein Knight. Mit Abschnitt 2 zählt er mit dem Default 21 und 3.
+Befund ohne Umbau: Der Hook behandelt einen `general-purpose`-Agenten wie jeden Shadow, aber nicht wie einen read-only Shadow. Scope-Lock, geschützte Pfade, Secrets, deny_bash und Rank gelten für jeden Aufrufer gleich (`ToolCallPolicy.cs:55-70`). Ask→Deny gilt für jeden Subagenten, also bei nicht leerer `agent_id` (`HookRunner.cs:23-38`, Bedingung in `:27`). `gate merge|verdict|check` und `wake schedule|cancel|fire` verweigert der Hook jedem Agenten (`ProtectBranchesRule.cs:41-56`, Bedingung `call.AgentType` nicht leer in `:20`). Die read-only-Regel greift nur für `warden` und `scout` (`ToolCallTypes.cs:104`, `read_only_shadows` in `.monarch/system.yaml`). Außer der read-only-Liste (`ToolCallPolicy.cs:455-462`) prüft keine Regel den Agenten beim Schreiben, und keine prüft das Modell. Ein fremder Agent schreibt also im Quest-Scope genauso wie ein Knight. Mit Abschnitt 2 zählt er mit dem Default 18 und 3.
 
 ## Belege
 
@@ -153,13 +181,13 @@ Befund ohne Umbau: Der Hook behandelt einen `general-purpose`-Agenten wie jeden 
 | Gate-Status bleibt proposed | `.monarch/gates/G-0129-mana-grenze-arbeitsgrenze-je-plan-und-mo.md:6` auf develop: `state: proposed`; der Gate-Branch ändert diese Datei nach dem Merge nicht (nächste Zeile) | `grep -n "^state:" .monarch/gates/G-0129-*.md` |
 | Nach dem Merge nur .monarch-Unterschiede | Ausgabe: 5 Dateien, 84 Einfügungen, 3 Löschungen, nur zwei Ledger-Dateien und drei Quest-Dateien (Q-0189 bis Q-0191) | `git diff --stat origin/develop origin/monarch/G-0129-mana-grenze-arbeitsgrenze` |
 | develop mit Pflicht-Checks | Ausgabe: `required_status_checks` mit `build-test (ubuntu-latest)`, `plugin`, `aot (linux-x64)`, `enforcement_level: everyone` | `gh api repos/DavidOeztuerk/umbrarch/branches/develop --jq .protection` |
-| Merge-Methode umgesetzt | `src/Monarch.Cli/MergeMethodResolver.cs:24-33` | `grep -n "public static MergeMethodChoice Resolve" src/Monarch.Cli/MergeMethodResolver.cs` |
+| Merge-Methode umgesetzt | `src/Monarch.Cli/MergeMethodResolver.cs:25-34` | `grep -n "public static MergeMethodChoice Resolve" src/Monarch.Cli/MergeMethodResolver.cs` |
 | Issue #48 geschlossen | Ausgabe: `CLOSED` | `gh issue view 48 --json state -q .state` |
 | Plan Pro | `.monarch/system.yaml:6` | `grep -n "plan:" .monarch/system.yaml` |
 | Plan Pro seit 28.10.2026 | Ausgabe: `5c9f83e 2026-10-28 G-0101 …` | `git log --format="%h %ad %s" --date=short -S"plan:" -- .monarch/system.yaml` |
 | Modelle der Agenten | `plugin/agents/*.md:4` | `grep -n "^model:" plugin/agents/*.md` |
 | Modelle seit 28.10.2026 unverändert | Ausgabe: je ein Commit `a5b3cd2 2026-10-28` | `git log --format="%h %ad" --date=short -L4,4:plugin/agents/warden.md` (ebenso knight.md) |
-| Messung der Shadow-Kosten | Skripte und Ergebnisdateien im Scratchpad der Session (`collect_ledger.py`, `shadow_costs.py`, `clean_stats.py`, `clean.txt`, `runs_noovl.txt`), bis Q-0194 sie nach `tools/shadow-costs.py` bringt | `python3 -I tools/shadow-costs.py ~/Projects/umbrarch ~/Projects/Noelia ~/Projects/workertransfer` (ab Q-0194) |
+| Messung der Shadow-Kosten | Strenge Tabelle (höchstens 2 min, ungerundet): Nachrechnung im PR-Kommentar `#issuecomment-7078646801`, Befund 3. Erste, gerundete Auswertung (28 Läufe): `clean.txt` im Scratchpad der Session, mit `collect_ledger.py`, `shadow_costs.py`, `clean_stats.py`. Bis Q-0194 die Logik nach `tools/shadow-costs.py` bringt | `python3 -I tools/shadow-costs.py ~/Projects/umbrarch ~/Projects/Noelia ~/Projects/workertransfer` (ab Q-0194) |
 | Fall aus 6b (77 % → 95 %) | Noelia `.monarch/ledger/2026-11/cli-20261121.e68aa931.jsonl` seq 5, 6 (nicht im Arbeitsordner) | `git -C ~/Projects/Noelia log --all --oneline -- .monarch/ledger/2026-11/cli-20261121.e68aa931.jsonl`, dann `git -C ~/Projects/Noelia show <commit>:<pfad>` |
 | Freshness im Shadow-Lauf | Noelia `.monarch/ledger/2026-11/be145c6d-54b5-441d-b8d7-f174b5fd2cfe.1ba0b664.jsonl` seq 179, 209 und `.monarch/ledger/2026-11/cli-20261121.1ba0b664.jsonl` seq 29–31, beide nicht im Arbeitsordner, aus den Branches gelesen | `git -C ~/Projects/Noelia log --all --oneline -- .monarch/ledger/2026-11/cli-20261121.1ba0b664.jsonl`, dann `git -C ~/Projects/Noelia show <commit>:<pfad>` für beide Dateien |
 

@@ -5,17 +5,17 @@ kind: main
 rank: A
 state: proposed
 dod:
-  - "Voraussetzung: Designrunde von Q-0192 abgeschlossen, Q-0193 fertig (ProtectBranchesRule.cs; worktree remove muss erlaubt bleiben) und Q-0196 fertig (GateCommands.cs)"
+  - "Voraussetzung: Designrunde von Q-0192 abgeschlossen, Q-0193 und Q-0196 fertig"
   - "gate merge setzt den Gate-Status in der Gate-Datei auf merged"
-  - "gate cleanup <G> verweigert ohne GateMerged für G im Ledger (kein [skip ci] vor dem Merge)"
-  - "Danach alles per git -C: Commit des Monarch-Nachtrags in der Gate-Worktree mit [skip ci], Push des Gate-Branchs mit Refspec, git worktree remove ohne --force; schmutzige Worktree: Abbruch mit Hinweis, nie --force"
-  - "Ein Befehl laut ADR-0020 bringt den Monarch-Stand gemergter Gates in die nächste Gate-Worktree; develop bekommt ihn mit dem nächsten Merge, kein direkter Push auf develop"
-  - "GateOnlyMain (ProtectBranchesRule.cs:41-56) verweigert gate cleanup in Subagenten (Policy-Test)"
+  - "gate cleanup verweigert ohne GateMerged und ohne IntegrationRunChecked green für das Gate, so kommt nie ein Skip-Marker vor dem Merge auf den Branch"
+  - "Ablauf laut ADR-0020 Abschnitt 6, alles per git -C: Monarch-Nachtrag in der Gate-Worktree committen (Skip-Marker in der ersten Zeile), Gate-Branch mit Refspec pushen, git worktree remove ohne --force; verweigert git das Entfernen: Grund und Dateien nennen, kein Text schlägt --force vor; Fehlerpfade und Wiederholung laut ADR"
+  - "gate carry laut ADR-0020 Abschnitt 4: übernimmt nur das Feld state gemergter Gates und ihrer Quests in die Gate-Worktree, keine Ledger-Dateien, kein direkter Push auf develop; wiederholt ohne Wirkung"
+  - "GateOnlyMain verweigert gate cleanup, gate carry und gate move-quest in Subagenten (Policy-Test)"
   - "Warden: höchstens eine Delta-Runde, danach ggf. schmale Prüfung nur des Fixes (Standardregel 3)"
 scope:
   include: ["src/Monarch.Cli/**", "src/Monarch.Policy/ProtectBranchesRule.cs", "tests/**"]
   exclude: []
 estimate: { session_pct: 16, weekly_pct: 4, gold_usd: 0 }
-boss: "Integrationstest mit Temp-Repo und Bare-Remote: cleanup vor GateMerged deny; danach Commit mit [skip ci] auf dem Gate-Branch im Remote, Worktree entfernt, Gate-Datei merged; Subagent-Aufruf deny"
+boss: "Integrationstest mit Temp-Repo und Bare-Remote: cleanup vor GateMerged deny; danach Commit mit Skip-Marker auf dem Gate-Branch im Remote, Worktree entfernt, Gate-Datei merged; carry übernimmt nur state; Subagent-Aufruf deny"
 ---
 # gate cleanup <G> und Gate-Status merged; Monarch-Stand gemergter Gates weitertragen (#44, #36, #46, #139)
