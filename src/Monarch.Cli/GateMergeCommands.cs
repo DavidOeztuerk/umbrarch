@@ -17,7 +17,7 @@ internal static partial class GateMergeCommands
 {
     // ADR-0019 5b: exactly these two names, compared exactly; no old name, no wildcard.
     private static readonly string[] WardenTypes = [RuleTexts.PluginName + ":warden", "warden"];
-    private static readonly string[] ClosedGateStates = ["cleared", "closed", "done", "failed", "abandoned"];
+    private static readonly string[] ClosedGateStates = ["cleared", "closed", "done", "failed", "abandoned", "merged"];
 
     private sealed record Target(ProjectPaths Paths, BoardGate Gate, ForgeRef Forge, int Pr, Rank Rank, IReadOnlyList<BoardQuest> Quests);
 
@@ -256,6 +256,7 @@ internal static partial class GateMergeCommands
 
             // The PUT answered, so the merge exists: record it with the sha the PUT returned.
             AppendMerged(ledger, gateId, t.Pr, pull.HeadSha, mergeSha, null, plan);
+            MarkMerged(t);
             env.Err.WriteLine($"Status unbekannt: GitHub hat den Merge von {gateStep} bestätigt ({Short(mergeSha)}), der PR war danach nicht lesbar; GateMerged ist ohne Base geschrieben. Auf der Forge prüfen, danach 'monarch gate check {gateId}'.");
             return 1;
         }
@@ -274,6 +275,7 @@ internal static partial class GateMergeCommands
         // A read that lags behind the PUT reports the test merge in merge_commit_sha: the answered PUT wins unless the PR reads as merged.
         var recorded = after.Merged ? after.MergeCommitSha ?? mergeSha! : mergeSha!;
         AppendMerged(ledger, gateId, t.Pr, pull.HeadSha, recorded, after.BaseRef, plan);
+        MarkMerged(t);
         if (!after.Merged)
         {
             return Refuse(env, $"GitHub accepted the merge, but pull request #{t.Pr} does not read as merged; check it on the forge.");
@@ -312,6 +314,10 @@ internal static partial class GateMergeCommands
             ledger.SessionId(), "cli", "GateMerged", ("gate", gateId), ("pr", (long)pr), ("sha", headSha), ("merge_commit_sha", mergeCommit), ("base", baseRef), ("method", plan.Method.Method), ("method_source", plan.Method.Source),
             ("overridden", plan.Overridden is null ? null : StringArray(plan.Overridden)), ("integration_head", plan.Overridden is null ? null : plan.IntegrationHead));
     }
+
+    // ADR-0020 §4: the gate file says merged, so a second gate merge and a late gate verdict refuse it; gate check reads the ledger and is unaffected.
+    private static void MarkMerged(Target t) =>
+        new LocalFileBoard(t.Paths.Root).UpsertGateAsync(t.Gate with { State = "merged" }).GetAwaiter().GetResult();
 
     private static JsonElement StringArray(IEnumerable<string> items)
     {
