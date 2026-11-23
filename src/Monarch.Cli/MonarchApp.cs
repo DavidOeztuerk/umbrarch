@@ -149,6 +149,13 @@ internal static class MonarchApp
         gateCheck.Arguments.Add(checkGate);
         gateCheck.SetAction(r => GateMergeCommands.Check(env, r.GetValue(checkGate)!));
         gate.Subcommands.Add(gateCheck);
+        var moveQuest = new Argument<string>("quest") { Description = "Quest id." };
+        var moveTo = new Option<string>("--to") { Description = "Target gate id.", Required = true };
+        var gateMoveQuest = new Command("move-quest", "Move a quest to another gate: both gate lists, the quest file and QuestMoved (proposed or accepted, not active).");
+        gateMoveQuest.Arguments.Add(moveQuest);
+        gateMoveQuest.Options.Add(moveTo);
+        gateMoveQuest.SetAction(r => GateCommands.MoveQuest(env, r.GetValue(moveQuest)!, r.GetValue(moveTo)!));
+        gate.Subcommands.Add(gateMoveQuest);
         root.Subcommands.Add(gate);
 
         var next = new Option<string?>("--next") { Description = "The next concrete step." };

@@ -333,6 +333,28 @@ internal static partial class GatePlan
         var gateFile = Directory.EnumerateFiles(Path.Combine(paths.MonarchDir, "gates"), gateId + "-*.md").First();
         BoardFiles.Edit(gateFile, r => r.With("type", new YamlScalar(gateKind)));
 
+        // ADR-0020 §5: a planned quest that sits in another gate leaves that gate's list; QuestMoved follows the quest file below.
+        var movedFrom = new Dictionary<string, string>(StringComparer.Ordinal);
+        var allGates = board.ListGatesAsync().GetAwaiter().GetResult();
+        foreach (var p in planned)
+        {
+            var others = allGates.Where(gate => gate.Id.Value != gateId && gate.Quests.Contains(p.Quest.Id)).ToList();
+            foreach (var other in others)
+            {
+                board.UpsertGateAsync(other with { Quests = [.. other.Quests.Where(q => q != p.Quest.Id)] }).GetAwaiter().GetResult();
+            }
+
+            var old = existing.FirstOrDefault(x => x.Id == p.Quest.Id);
+            if (old is not null && old.Gate.Value != gateId)
+            {
+                movedFrom[p.Quest.Id.Value] = old.Gate.Value;
+            }
+            else if (others.Count > 0)
+            {
+                movedFrom[p.Quest.Id.Value] = others[0].Id.Value;
+            }
+        }
+
         var ledger = new ProjectLedger(paths, env.Clock);
         if (oldGate is null)
         {
@@ -355,6 +377,10 @@ internal static partial class GatePlan
             });
             ledger.Append(session, "mcp", "QuestProposed", ("quest", p.Quest.Id.Value), ("gate", gateId), ("rank", p.Quest.Rank.ToString()),
                 ("kind", p.Quest.Kind.ToString().ToLowerInvariant()), ("revised", revised));
+            if (movedFrom.TryGetValue(p.Quest.Id.Value, out var movedFromGate))
+            {
+                ledger.Append(session, "mcp", "QuestMoved", ("quest", p.Quest.Id.Value), ("from", movedFromGate), ("to", gateId));
+            }
         }
 
         using var ms = new MemoryStream();
