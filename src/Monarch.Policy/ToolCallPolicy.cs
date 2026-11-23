@@ -128,7 +128,8 @@ public static partial class ToolCallPolicy
                 {
                     case "cd":
                     {
-                        var target = BashAnalysis.CdTarget(seg);
+                        var target = BashAnalysis.CdDestination(seg);
+                        if (target is null) break; // unbekannte Option: cd scheitert, cwd und OLDPWD bleiben
                         var next = target == "-" ? prev : Resolve(target, cur);
                         (prev, cur) = (cur, next);
                         break;

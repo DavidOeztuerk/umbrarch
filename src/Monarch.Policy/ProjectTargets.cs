@@ -17,13 +17,33 @@ public static class ProjectTargets
         if (call.ToolName != "Bash" || call.Command is not { } cmd) return list;
         var segments = BashAnalysis.Segments(cmd);
         var cur = rs.Cwd;
+        // Zweiter Cursor wie das cwd-Modell (ToolCallPolicy.Canon): nach einer Subshell gilt wieder das Verzeichnis davor.
+        var scoped = rs.Cwd;
+        var saved = new Stack<string>();
         var bases = new List<string> { rs.Cwd };
-        foreach (var (dir, changes) in BashAnalysis.DirectoryTargets(segments))
+        foreach (var seg in segments)
         {
-            var d = rs.Resolve(PathResolver.ExpandTilde(dir), cur);
-            Add(d);
-            if (!bases.Contains(d)) bases.Add(d);
-            if (changes) cur = d;
+            foreach (var ev in seg.Events)
+            {
+                if (ev == '(') saved.Push(scoped);
+                else if (saved.Count > 0) scoped = saved.Pop();
+            }
+
+            foreach (var (dir, changes) in BashAnalysis.DirectoryTargets([seg]))
+            {
+                var expanded = PathResolver.ExpandTilde(dir);
+                var d = rs.Resolve(expanded, cur);
+                var s = rs.Resolve(expanded, scoped);
+                Add(d);
+                Add(s);
+                if (!bases.Contains(d)) bases.Add(d);
+                if (!bases.Contains(s)) bases.Add(s);
+                if (changes)
+                {
+                    cur = d;
+                    scoped = s;
+                }
+            }
         }
 
         foreach (var token in BashAnalysis.PathTokens(cmd))

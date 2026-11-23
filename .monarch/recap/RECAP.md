@@ -1,10 +1,10 @@
 # RECAP
 
 ## Stand
-- Zeitpunkt: 2026-11-22T14:28:18Z
+- Zeitpunkt: 2026-11-22T18:30:26Z
 - Plan: Pro
-- Mana 5h: 58% (Limit 90%, Reset 2026-11-22T18:10:00Z)
-- Mana 7d: 75% (Limit 96%, Reset 2026-11-25T11:00:00Z)
+- Mana 5h: 18% (Limit 90%, Reset 2026-11-22T23:10:00Z)
+- Mana 7d: 82% (Limit 96%, Reset 2026-11-25T11:00:00Z)
 - Limits: 5h 90%, 7d 96% (plan default)
 
 ## Aktiv
@@ -33,7 +33,7 @@
 - Q-0150: Heikle Quest nach Standardregel 3: Warden-Runde über das Design vor dem Code, kein src-Code, kein anderer Test und keine andere Schwelle aufgeweicht, Schlussrunde des Wardens mit Verdict am Head-SHA
 
 ## Nächster konkreter Schritt
-G-0130 PR 163. Q-0192 in_review (Design freigegeben, issuecomment-7079968810). Q-0193 in_review: Code 27d5815, Warden-Code-Runde changes (issuecomment-7080369605, 3 major), Fix 8198b9d (issuecomment-7080564575), Warden-Delta-Runde laeuft. Bei approve: weiter Q-0194 (Knight, ADR §2, Matcher hooks.json, tools/shadow-costs.py), sonst schmale Pruefung nur des Fixes, dann Owner. Nacharbeit-Issue am Gate-Ende: Runde-1-minor soweit offen, Delta-minor c e f h, Q-0193-minor 6 7 8. Q-0195 boss praezisieren (anderes Fenster nicht zurueckgesetzt). Q-0197 carry nicht ueber BoardNames.ParseState pruefen.
+G-0130 PR 163, Head 971f4c7. Q-0193: schmale Warden-Pruefung changes (issuecomment-7083652257): Fix 971f4c7 oeffnet 2 vorher verweigerte Formen (env -C -d vor sh -c: WithEnvDirs muss Ziel woertlich setzen, ./ vor -; ProjectTargets.Locations ignoriert Subshell-Grenzen). Standardregel 3: Frage an Owner gestellt (Optionen: fixen + Schlussrunde prueft / fixen + eigene Pruefung / Fix-Teil zuruecknehmen). Auf Antwort warten, dann Q-0194. Woche 79 % von 96 %: Rest des Gates passt voraussichtlich nicht vor 25.11. 11:00 UTC.
 
 ## Offene Entscheidungen
 - Owner: historische docs (ADR-0001..0018, lessons, evidence) bleiben? Default ja (Vorschlag)

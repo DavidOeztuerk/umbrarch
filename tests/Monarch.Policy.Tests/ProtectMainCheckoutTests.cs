@@ -203,6 +203,34 @@ public sealed class ProtectMainCheckoutTests : IDisposable
     [InlineData("env --u FOO --c {0} git commit -m x")]
     public void Env_long_options_may_be_abbreviated(string template) => Deny(string.Format(template, _main), _wt);
 
+    [Theory]
+    [InlineData("env -C -d sh -c \"git commit -m x\"")]
+    [InlineData("env -C-d sh -c \"git commit -m x\"")]
+    [InlineData("env -iC -d sh -c \"git commit -m x\"")]
+    [InlineData("env --chdir=-d sh -c \"git commit -m x\"")]
+    [InlineData("env -C -d sh <<'EOF'\ngit commit -m x\nEOF")]
+    [InlineData("cat <<'EOF' | env -C -d sh\ngit commit -m x\nEOF")]
+    public void Env_chdir_value_starting_with_a_dash_is_taken_literally(string cmd) => Deny(cmd, _main);
+
+    [Fact]
+    public void Env_chdir_dash_is_a_directory_named_dash_not_oldpwd() =>
+        Deny($"cd {_wt} && cd {_main} && env -C - sh -c \"git commit -m x\"", _main);
+
+    [Fact]
+    public void Env_chdir_value_starting_with_a_dash_inside_a_worktree_is_allowed() =>
+        Allow("env -C -d sh -c \"git commit -m x\"", _wt);
+
+    [Theory]
+    [InlineData("cd -d; git commit -m x")]
+    [InlineData("cd -- -d; git commit -m x")]
+    [InlineData("cd -L -- -d; git commit -m x")]
+    [InlineData("cd --bogus && git checkout dev")]
+    public void Cd_options_are_read_like_bash(string cmd) => Deny(cmd, _main);
+
+    [Fact]
+    public void Cd_with_a_known_option_into_a_worktree_is_allowed() =>
+        Allow($"cd -L {_wt}; git commit -m x", _main);
+
     [Fact]
     public void Basis_git_checkout_main_in_the_main_checkout_is_denied() => Deny("git checkout main", _main);
 

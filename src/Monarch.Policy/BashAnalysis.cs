@@ -120,7 +120,12 @@ internal static class BashAnalysis
     private static List<Segment> WithEnvDirs(List<string> envDirs, List<Segment> nested)
     {
         if (envDirs.Count == 0 || nested.Count == 0) return nested;
-        var cds = envDirs.Select(d => new Segment("cd " + d, ["cd", d], Canonicalize(["cd", d], "cd " + d)) { RawWords = ["cd", d] });
+        var cds = envDirs.Select(d =>
+        {
+            // env liest den Wert von -C wörtlich; cd läse "-d" als Option und "-" als OLDPWD.
+            var target = d.StartsWith('-') ? "./" + d : d;
+            return new Segment("cd " + target, ["cd", target], Canonicalize(["cd", target], "cd " + target)) { RawWords = ["cd", target] };
+        });
         return [.. cds, .. nested];
     }
 
@@ -256,7 +261,14 @@ internal static class BashAnalysis
         foreach (var seg in segments)
         {
             var t = seg.Tokens;
-            if (seg.Word is "cd" or "pushd")
+            if (seg.Word == "cd")
+            {
+                var i = CdOperandIndex(t);
+                if (i >= 0 && i < t.Length) list.Add((t[i], true));
+                continue;
+            }
+
+            if (seg.Word == "pushd")
             {
                 var i = 1;
                 while (i < t.Length && t[i].StartsWith('-') && t[i].Length > 1) i++;
@@ -288,6 +300,29 @@ internal static class BashAnalysis
         while (i < t.Length && t[i].StartsWith('-') && t[i].Length > 1) i++;
         return i < t.Length ? t[i] : "~";
     }
+
+    /// <summary>
+    /// Ziel von <c>cd</c> wie bash: <c>-L</c>, <c>-P</c>, <c>-e</c>, <c>-@</c> (auch gebündelt) übersprungen, nach <c>--</c> wörtlich, ohne Ziel <c>~</c>,
+    /// <c>-</c> für OLDPWD. Bei einer unbekannten Option bricht bash ab: <c>null</c>, das cwd bleibt.
+    /// </summary>
+    public static string? CdDestination(Segment seg)
+    {
+        var i = CdOperandIndex(seg.Tokens);
+        return i < 0 ? null : i < seg.Tokens.Length ? seg.Tokens[i] : "~";
+    }
+
+    /// <summary>Index des Ziels von <c>cd</c>; <c>-1</c> bei einer unbekannten Option, <c>t.Length</c> ohne Ziel.</summary>
+    private static int CdOperandIndex(string[] t)
+    {
+        var i = 1;
+        while (i < t.Length && IsCdOption(t[i])) i++;
+        if (i < t.Length && t[i] == "--") return i + 1;
+        if (i < t.Length && t[i].Length > 1 && t[i][0] == '-') return -1;
+        return i;
+    }
+
+    private static bool IsCdOption(string token) =>
+        token.Length > 1 && token[0] == '-' && token[1..].All(ch => ch is 'L' or 'P' or 'e' or '@');
 
     /// <summary>Git-Unterkommando (nach Globaloptionen wie <c>-C dir</c>) und sein Index, sonst <c>null</c>.</summary>
     public static string? GitSubcommand(string[] tokens, out int index)
