@@ -161,6 +161,9 @@ internal static class MonarchApp
         gateCleanup.Arguments.Add(cleanupGate);
         gateCleanup.SetAction(r => GateCleanupCommands.Cleanup(env, r.GetValue(cleanupGate)!));
         gate.Subcommands.Add(gateCleanup);
+        var gateCarry = new Command("carry", "Take the state of merged gates and their quests from refs/remotes/origin/monarch/G-* into this worktree: only the field state, only gates that exist here, no ledger files, no commit (main only).");
+        gateCarry.SetAction(_ => GateCarryCommands.Carry(env));
+        gate.Subcommands.Add(gateCarry);
         root.Subcommands.Add(gate);
 
         var next = new Option<string?>("--next") { Description = "The next concrete step." };
