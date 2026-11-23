@@ -9,15 +9,16 @@ description: Standardregeln für jede Session in einem Umbrarch-Projekt. Lesen v
 2. **Ein Gate** entspricht einem Branch `monarch/G-xxxx-<slug>` von `origin/develop`, **einer Worktree im Projekt** und einem PR nach `develop`.
    - Anlegen: `git worktree add .claude/worktrees/<G-xxxx> -b monarch/G-xxxx-<slug> origin/develop`, für einen bestehenden Branch ohne `-b`. Danach **EnterWorktree mit `path`**.
    - Ist `.claude/worktrees/` noch nicht ignoriert, kommt es zuerst in `.git/info/exclude`.
-   - Den Haupt-Checkout nie auf einen anderen Branch umstellen, nie committen, nie anfassen.
+   - Den Haupt-Checkout nie auf einen anderen Branch umstellen, nie committen, nie anfassen. Der Hook verweigert dort schreibende Git-Befehle (`protect_main_checkout`); der Weg ist die Gate-Worktree.
    - In der Worktree vorher `git status` prüfen. Uncommittete Hook-Ledger-Zeilen nicht verwerfen; sie kommen mit dem ersten Commit mit, wenn `monarch ledger verify` ok ist.
    - **Aufräumen nach Merge und Clear macht die Session selbst:**
-     1. `monarch ledger verify` in der Worktree, und `monarch gate check <G-xxxx>` muss grün sein. Erst dann wird die Worktree entfernt (Owner 18.11.2026; bei G-0118 fehlte deshalb IntegrationRunChecked).
-     2. Den restlichen Monarch-Stand committen (`git add .monarch`, also Ledger-Zeilen und Quest-Status „cleared“) und auf den **Gate-Branch** pushen, damit er versioniert erhalten bleibt. Die Commit-Message endet in der ersten Zeile mit **`[skip ci]`**, denn ohne Code-Änderung braucht es keinen CI-Lauf. **Vor dem Merge nie `[skip ci]` auf dem Gate-Branch:** Bei Squash landet es in der Merge-Nachricht, und `develop` bekommt keinen CI-Lauf. Der Aufräum-Commit nach dem Merge trägt ihn.
-     3. ExitWorktree (keep).
-     4. `git worktree remove <pfad>` **ohne** `--force`.
+     1. `monarch ledger verify` in der Worktree, und `monarch gate check <G-xxxx>` muss grün sein (Owner 18.11.2026; bei G-0118 fehlte deshalb IntegrationRunChecked).
+     2. ExitWorktree (keep).
+     3. Aus dem Haupt-Checkout `~/.monarch/bin/monarch gate cleanup <G-xxxx>`. Der Befehl committet den restlichen Monarch-Stand (`git add .monarch`) mit **`[skip ci]`** in der ersten Zeile auf den **Gate-Branch**, pusht ihn und entfernt die Worktree mit `git worktree remove` **ohne** `--force`. **Vor dem Merge nie `[skip ci]` auf dem Gate-Branch:** Bei Squash landet es in der Merge-Nachricht, und `develop` bekommt keinen CI-Lauf.
 
-     Verweigert git das, etwa wegen unversionierter Probe- oder Fremddateien, oder verweigert es Monarch: nichts erzwingen, sondern dem User den Grund und die Dateien nennen. Bis das Aufräumen automatisiert ist, gilt dieser Ablauf.
+     Verweigert der Befehl das Entfernen, nennt er Grund und Dateien. Nichts erzwingen, sondern dem User den Grund und die Dateien nennen. **Nie `--force` vorschlagen**, auch nicht als Ausweg in einer Meldung oder Frage.
+   - **Neue Gate-Worktree:** direkt nach EnterWorktree `~/.monarch/bin/monarch gate carry`. Er übernimmt den Status gemergter Gates und ihrer Quests; das Ergebnis kommt mit dem ersten Commit mit.
+   - **Quest in ein anderes Gate:** `~/.monarch/bin/monarch gate move-quest <Q-xxxx> --to <G-xxxx>` (nur proposed oder accepted, nicht die aktive Quest). Gate- und Quest-Dateien nie von Hand umhängen.
 3. **Prüfung nach Risiko (ab Rank A):**
    - **Heikle Quests** ändern Schutzregeln und Hooks, Anmeldung, Rechte, Schlüssel, das Datenmodell und Migrationen oder die Architektur. Sie laufen so: Design-ADR im PR, Warden-Review mit einer Runde und höchstens einer Delta-Runde, danach TDD, dann eine eigene Code-Runde des Wardens. „Design zuerst nach Standardregel 3“ in einer Prompt meint diese Quests.
    - **Alle anderen Quests** laufen ohne Design-Runde und ohne eigene Code-Runde: TDD, Änderung kurz im PR beschreiben.
@@ -27,9 +28,10 @@ description: Standardregeln für jede Session in einem Umbrarch-Projekt. Lesen v
    - **Echte Entscheidungen bleiben beim User:** Wo Optionen unterschiedliches Verhalten für Nutzer, Daten oder Geschäft bedeuten (z. B. wer an KI-Schlüssel darf, was eine Lockerung einer Schutzregel ist), fragt die Session in dieser Session, in 5–8 Zeilen einfacher Sprache.
    - **Jedes Design steht in einfacher Sprache im PR.** Vor einem Merge nach `main` bekommt der User eine Liste aller Designs seit dem letzten Release.
    - **Kein approve nach der Delta-Runde?** Sind nur technische Punkte offen, behebt die Session sie und holt eine schmale Prüfung nur dieses Fixes, ohne den User zu fragen. Gibt es auch dann kein approve, oder berührt ein offener Punkt eine Schutzregel, Nutzer oder Daten, geht die Frage an den User.
+   - **„Gilt als freigegeben“ ersetzt kein approve.** Ohne approve des Wardens am aktuellen Head gibt es kein `gate verdict` mit approve und keinen `gate merge`. Mehr als eine Delta-Runde gibt es nicht; danach nur die schmale Prüfung des Fixes oder die Frage an den User.
    - **Rank S:** Jede mutierende Aktion fragt die Session einzeln beim User an (ADR-0007).
    - **Immer einzeln fragen** (jeder Rank): Secrets und Schlüssel lesen oder ändern, Datenbanken löschen oder Daten ändern, Force-Push, alles auf `main`, Releases und Tags.
-4. **Tests:** Jeder Fix bekommt einen Test, der vorher rot und danach grün ist. Tests, Schwellwerte und CI-Gates werden nie aufgeweicht. Die Ursache wird belegt, bevor gefixt wird.
+4. **Tests:** Jeder Fix bekommt einen Test, der vorher rot und danach grün ist. Tests, Schwellwerte und CI-Gates werden nie aufgeweicht. Die Ursache wird belegt, bevor gefixt wird. **Kommentare im Code:** keine Historie (kein „früher“, „neu seit“, „vorher war“), höchstens zwei Zeilen und nur das Warum. Ein Verweis auf ADR oder Issue als Grund ist erlaubt; die Geschichte steht in Git und im PR.
 5. **Merge** nur per `monarch gate merge` nach `develop`. `develop` muss vorher und nachher grün sein. `main`, Releases und Tags macht nur der User.
 6. **Ein Deny stoppt die Aktion.** Den Grund verstehen; keine Varianten, keine Umwege. Nennt der Deny-Text einen Weg, ist dieser Weg kein Umweg. Die Session arbeitet an anderer Stelle weiter und meldet das Deny gebündelt im Kurzbericht (Regel 10). Den User fragt sie nur, wenn ohne die Aktion nichts mehr weitergeht. Ein Fehlalarm wird als Issue im Monarch-Repo notiert. Bekannte Fehlalarme vermeidest du von Anfang an: Statt sed nimmst du zum Lesen `grep -n` und das Read-Werkzeug, für Änderungen das Edit-Werkzeug. Suchst du in einer Datei nach dem Wort `.env`, nimmst du das Read-Werkzeug.
 
@@ -58,7 +60,7 @@ description: Standardregeln für jede Session in einem Umbrarch-Projekt. Lesen v
 
 Je Gate in genau dieser Reihenfolge:
 
-1. Worktree anlegen (`git worktree add`), dann EnterWorktree mit `path`.
+1. Worktree anlegen (`git worktree add`), dann EnterWorktree mit `path`, dann `gate carry`.
 2. `gate_plan` mit `project` = Worktree.
 3. `quest accept` und `quest start`, je Quest nacheinander (eine aktive Quest je Projekt).
 4. TDD: Test vorher rot, danach grün.
@@ -67,4 +69,4 @@ Je Gate in genau dieser Reihenfolge:
 7. Warden-Runde, dann `gate verdict` mit der URL der Review.
 8. `gate merge`, dann `gate check`.
 9. `evidence sync` mit Quest-ID, je Quest.
-10. Aufräumen: Monarch-Stand mit `[skip ci]` auf den Gate-Branch committen, ExitWorktree (keep), `git worktree remove` ohne `--force`.
+10. Aufräumen: ExitWorktree (keep), dann aus dem Haupt-Checkout `gate cleanup <G-xxxx>` (Monarch-Stand mit `[skip ci]` auf den Gate-Branch, Push, `git worktree remove` ohne `--force`).

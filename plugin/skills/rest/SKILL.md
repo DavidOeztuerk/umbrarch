@@ -11,7 +11,7 @@ description: Beendet die Arbeit geordnet (Rest): sichert Stand, schliesst Sitzun
 
 ## Weckruf
 
-`monarch rest` gibt Weckzeit (lokal und UTC), CronCreate-Ausdruck und den festen Prompt aus (ADR-0008).
+`monarch rest` gibt Weckzeit (lokal und UTC), CronCreate-Ausdruck und den festen Prompt aus (ADR-0008). Die Weckzeit ist Reset + 1 Minute; liegt der Reset schon zurueck, jetzt + 1 Minute (ADR-0020).
 
 1. **Pflicht:** `CronCreate` als One-Shot mit genau diesem Ausdruck und genau diesem Prompt. Ohne ihn endet `/rest` nicht. Den Prompt nicht umformulieren.
 2. **Nur bei Opt-in des Owners** (`system.yaml`: `mana.wake: launchd|systemd`; `monarch rest` nennt dann den Befehl): zusaetzlich `~/.monarch/bin/monarch wake schedule --session <session-uuid> --at <Weckzeit-UTC>`. Ohne Opt-in verweigert das Binary den Befehl; kein Umgehen, kein Aendern von `system.yaml`.
@@ -22,5 +22,5 @@ description: Beendet die Arbeit geordnet (Rest): sichert Stand, schliesst Sitzun
 - CLI nur per Bash: `~/.monarch/bin/monarch ...`. Nie raten, was das CLI ausgeben wuerde.
 - Quest-Lifecycle: `quest accept` -> `quest start` -> Arbeit auf dem Gate-Branch `monarch/G-xxxx-<slug>` -> `quest submit` -> `quest pr` -> `evidence sync`. `quest verify` und `quest clear` nur auf Basis von Forge-Evidence (CI gruen, Review), nie aus eigener Behauptung.
 - Merge-Regel (ADR-0007): Merge nur nach `develop` (Integrations-Branch) ueber `~/.monarch/bin/monarch gate merge <G-xxxx>`, nie nach main/master (das merged nur der Owner). Rank E-A, nach gruener CI und unabhaengigem Warden-Verdict (`gate verdict`); `gh pr merge` und direkte Pushes auf geschuetzte Branches verweigert der Hook. S: jede veraendernde Aktion einzeln beim Nutzer erfragen.
-- Mana-Regel: vor jedem Schritt `~/.monarch/bin/monarch mana --estimate`. Am Limit: bis zu einem sicheren Punkt fertig machen, `~/.monarch/bin/monarch recap`, dann stoppen. Reset in weniger als 10 Minuten: ohne Recap pausieren.
+- Mana-Regel: vor jedem Schritt `~/.monarch/bin/monarch mana --estimate`. Am Limit: bis zu einem sicheren Punkt fertig machen, `~/.monarch/bin/monarch recap`, dann stoppen. Reset in weniger als 10 Minuten: ohne Recap pausieren. Meldet der Guard „Reset erfolgt, Stand wird erneuert“: nach 1 Minute erneut pruefen, bis zur letzten Pruefzeit der Meldung.
 - Nie Credential-Dateien lesen (`.env`, Schluessel, Tokens, `~/.ssh`, `~/.aws`, Keychains).
