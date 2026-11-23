@@ -234,7 +234,10 @@ internal static class HookRunner
             evaluated.Add(Evaluate(t, call, env, full: false, input));
         }
 
-        var (decision, _) = ConvertAskForSubagent(ToolCallPolicy.Combine(evaluated.Select(e => e.Decision)), input.AgentId);
+        // Mana brake for shadows (ADR-0020 §2): once per call, combined with the policy results and logged once in the nearest project.
+        var primary = chain.Count > 0 ? chain[0] : targets.FirstOrDefault();
+        var mana = primary is null ? ManaResult.None : ManaCheck(input, primary, env);
+        var (decision, _) = ConvertAskForSubagent(ToolCallPolicy.Combine(evaluated.Select(e => e.Decision).Append(mana.Decision)), input.AgentId);
         if (decision.Kind != PolicyDecisionKind.Allow)
         {
             Emit(env, new HookSpecificOutput
@@ -272,6 +275,79 @@ internal static class HookRunner
                 }
             });
         }
+
+        if (primary is not null)
+        {
+            LogMana(input, primary, mana, env);
+        }
+    }
+
+    private sealed record ManaResult(PolicyDecision Decision, string? Agent, ModelClass? Model, double Est5h, double Est7d, ManaSnapshot? Snapshot)
+    {
+        public static ManaResult None { get; } = new(PolicyDecision.Allow, null, null, 0, 0, null);
+    }
+
+    // A read failure gives no mana finding, as without a snapshot (ADR-0020 §2: no snapshot, no deny); it is logged.
+    private static ManaResult ManaCheck(HookInput input, ProjectPaths primary, CliEnv env)
+    {
+        var start = ShadowMana.IsShadowStart(input.ToolName);
+        if (!start && string.IsNullOrWhiteSpace(input.AgentId))
+        {
+            return ManaResult.None;
+        }
+
+        try
+        {
+            var config = SystemConfigReader.Load(primary.Root);
+            var manaFile = ManaStore.Read(env.Home);
+            var now = env.Clock.UtcNow;
+            var snapshot = ManaStore.ToSnapshot(manaFile, now, config.Plan);
+            var sessionClass = ManaSupport.LimitClass(env, manaFile, input.SessionId).Class;
+            var limits = ManaSupport.Resolve(config, sessionClass).Limits;
+            var brake = ShadowMana.Brake(input.AgentId, snapshot, limits, now);
+            if (!start)
+            {
+                return new ManaResult(brake, null, null, 0, 0, snapshot);
+            }
+
+            var agent = ShadowMana.AgentName(HookToolInput.Text(input.ToolInput?.SubagentType));
+            var model = ShadowMana.ModelClassOf(HookToolInput.Text(input.ToolInput?.Model), agent, sessionClass);
+            var (c5, c7) = ShadowMana.Cost(agent, model);
+            var decision = ToolCallPolicy.Combine([brake, ShadowMana.Start(snapshot, agent, model, limits, now)]);
+            return new ManaResult(decision, agent, model, c5, c7, snapshot);
+        }
+        catch (Exception ex)
+        {
+            Log(primary, env, "mana", ex);
+            return ManaResult.None;
+        }
+    }
+
+    private static void LogMana(HookInput input, ProjectPaths primary, ManaResult mana, CliEnv env)
+    {
+        if (mana.Decision.Kind == PolicyDecisionKind.Allow && mana.Agent is null)
+        {
+            return;
+        }
+
+        var ledger = new ProjectLedger(primary, env.Clock);
+        Append(primary, env, () =>
+        {
+            var session = ledger.SessionId(input.SessionId);
+            if (mana.Decision.Kind != PolicyDecisionKind.Allow)
+            {
+                ledger.Append(session, Actor(input), "PolicyDecided", ("rule", mana.Decision.Rule), ("kind", "deny"), ("tool", input.ToolName),
+                    ("agent_type", input.AgentType), ("quest", ActiveId(primary)), ("reason", mana.Decision.Reason), ("agent_id", input.AgentId));
+            }
+
+            if (mana.Agent is not null)
+            {
+                ledger.Append(session, Actor(input), "ShadowStarted", ("agent_type", mana.Agent), ("model_class", mana.Model?.ToString().ToLowerInvariant()),
+                    ("est_5h", mana.Est5h), ("est_7d", mana.Est7d),
+                    ("five_hour_used_pct", mana.Snapshot is { HasFiveHour: true } s ? (double?)s.Effective5h : null),
+                    ("stale", mana.Snapshot?.IsStale), ("decision", mana.Decision.Kind == PolicyDecisionKind.Deny ? "deny" : "allow"));
+            }
+        });
     }
 
     // A broken config falls back to the built-in defaults (protection and bans stay on); a broken active.json is evaluated
