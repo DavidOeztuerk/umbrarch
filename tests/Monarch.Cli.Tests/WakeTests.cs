@@ -9,7 +9,7 @@ internal sealed class WakeRig : IDisposable
 {
     public const string Session = "da7d131d-0be1-43aa-9a10-991e823808ea";
     public static readonly DateTimeOffset Reset = new(2026, 10, 28, 19, 30, 0, TimeSpan.Zero);
-    public static readonly DateTimeOffset At = new(2026, 10, 28, 19, 33, 0, TimeSpan.Zero);
+    public static readonly DateTimeOffset At = Reset + WakePlan.Slack; // Weckzeit zum Reset (ADR-0020 §3)
 
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "monarch-wake-" + Guid.NewGuid().ToString("N"));
 
@@ -171,7 +171,7 @@ public class WakeScheduleTests
 
         Assert.True(Path.IsPathRooted(args[0]));
         Assert.Equal(rig.MonarchBin, args[0]);
-        Assert.Equal(["wake", "fire", WakeRig.Session, "--at", "2026-10-28T19:33:00Z"], args.Skip(1));
+        Assert.Equal(["wake", "fire", WakeRig.Session, "--at", "2026-10-28T19:31:00Z"], args.Skip(1));
         Assert.DoesNotContain(args, a => a is "sh" or "bash" or "zsh" or "-c" || a.EndsWith("/sh", StringComparison.Ordinal) || a.EndsWith("/bash", StringComparison.Ordinal));
         Assert.DoesNotContain(args, a => a.Contains("Mana-Reset", StringComparison.Ordinal));
         Assert.Equal(rig.Project.Root, ValueOf(dict, "WorkingDirectory").Value);
@@ -202,9 +202,9 @@ public class WakeScheduleTests
         Assert.Equal(0, rig.Schedule().Code);
         var call = Assert.Single(rig.Calls("systemd-run"));
         Assert.Contains("[--user]", call, StringComparison.Ordinal);
-        Assert.Contains("[--on-calendar=2026-10-28 19:36:00 UTC]", call, StringComparison.Ordinal);
+        Assert.Contains("[--on-calendar=2026-10-28 19:34:00 UTC]", call, StringComparison.Ordinal);
         Assert.Contains($"[--working-directory={rig.Project.Root}]", call, StringComparison.Ordinal);
-        Assert.Contains($"[{rig.MonarchBin}][wake][fire][{WakeRig.Session}][--at][2026-10-28T19:33:00Z]", call, StringComparison.Ordinal);
+        Assert.Contains($"[{rig.MonarchBin}][wake][fire][{WakeRig.Session}][--at][2026-10-28T19:31:00Z]", call, StringComparison.Ordinal);
         Assert.DoesNotContain("[sh]", call, StringComparison.Ordinal);
         Assert.DoesNotContain("[-c]", call, StringComparison.Ordinal);
         Assert.False(File.Exists(rig.PlistPath));
@@ -350,9 +350,9 @@ public class RestWakeTimeTests
         Seed.Mana(p, 92, 30, new DateTimeOffset(2026, 10, 27, 14, 0, 0, TimeSpan.Zero));
         var r = p.Run(["rest"]);
         Assert.Equal(0, r.Code);
-        var wake = new DateTimeOffset(2026, 10, 27, 14, 3, 0, TimeSpan.Zero);
+        var wake = new DateTimeOffset(2026, 10, 27, 14, 1, 0, TimeSpan.Zero);
         var local = TimeZoneInfo.ConvertTime(wake, TimeZoneInfo.Local);
-        Assert.Contains("Wake at 2026-10-27T14:03:00Z", r.Out, StringComparison.Ordinal);
+        Assert.Contains("Wake at 2026-10-27T14:01:00Z", r.Out, StringComparison.Ordinal);
         Assert.Contains("local " + local.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture), r.Out, StringComparison.Ordinal);
         Assert.Contains($"Cron: {WakePlan.Cron(wake, TimeZoneInfo.Local)}", r.Out, StringComparison.Ordinal);
         Assert.Contains("Prompt: " + WakePlan.Prompt(Path.Combine(p.Root, ".monarch", "recap", "RECAP.md")), r.Out, StringComparison.Ordinal);
@@ -363,7 +363,7 @@ public class RestWakeTimeTests
     {
         using var p = new TempProject();
         Seed.Mana(p, 92, 97, new DateTimeOffset(2026, 10, 27, 14, 0, 0, TimeSpan.Zero), new DateTimeOffset(2026, 10, 30, 9, 0, 0, TimeSpan.Zero));
-        Assert.Contains("Wake at 2026-10-30T09:03:00Z", p.Run(["rest"]).Out, StringComparison.Ordinal);
+        Assert.Contains("Wake at 2026-10-30T09:01:00Z", p.Run(["rest"]).Out, StringComparison.Ordinal);
     }
 
     [Fact]

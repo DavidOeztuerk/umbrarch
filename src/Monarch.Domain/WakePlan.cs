@@ -18,8 +18,8 @@ public enum WakeWindow
 /// <summary>Reine Regeln des Weckrufs (ADR-0008): Weckzeit, Cron-Ausdruck, festes Prompt-Template, UUID-Prüfung, Zeitfenster.</summary>
 public static class WakePlan
 {
-    /// <summary>Abstand zwischen <c>resets_at</c> und der Weckzeit.</summary>
-    public static readonly TimeSpan Slack = TimeSpan.FromMinutes(3);
+    /// <summary>Abstand zwischen <c>resets_at</c> und der Weckzeit (ADR-0020 §3).</summary>
+    public static readonly TimeSpan Slack = TimeSpan.FromMinutes(1);
 
     /// <summary>Nachfrist des Außen-Jobs nach der Weckzeit; länger als der Cron-Jitter von 90 s, damit der In-Session-Cron zuerst feuert.</summary>
     public static readonly TimeSpan Grace = TimeSpan.FromMinutes(3);
@@ -27,10 +27,13 @@ public static class WakePlan
     /// <summary>Älter als das ist ein <c>--at</c> veraltet (eine Plist kennt kein Jahr).</summary>
     public static readonly TimeSpan MaxAge = TimeSpan.FromHours(24);
 
-    /// <summary>Weckzeit: <c>resets_at</c> + 3 min, auf volle Minuten, die lokale Minute weder :00 noch :30 (Jitter-Minuten).</summary>
-    public static DateTimeOffset WakeTime(DateTimeOffset resetsAt, TimeZoneInfo zone)
+    /// <summary>
+    /// Weckzeit: <c>resets_at</c> + 1 min; liegt <c>resets_at</c> vor <paramref name="now"/>, dann <paramref name="now"/> + 1 min (ADR-0020 §3).
+    /// Auf volle Minuten, die lokale Minute weder :00 noch :30 (Jitter-Minuten).
+    /// </summary>
+    public static DateTimeOffset WakeTime(DateTimeOffset resetsAt, TimeZoneInfo zone, DateTimeOffset? now = null)
     {
-        var t = resetsAt + Slack;
+        var t = (now is { } n && resetsAt < n ? n : resetsAt) + Slack;
         t = new DateTimeOffset(t.Year, t.Month, t.Day, t.Hour, t.Minute, 0, t.Offset);
         while (TimeZoneInfo.ConvertTime(t, zone).Minute is 0 or 30)
         {

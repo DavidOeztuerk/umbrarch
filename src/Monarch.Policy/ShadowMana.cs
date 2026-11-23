@@ -65,6 +65,11 @@ public static class ShadowMana
         var (c5, c7) = Cost(agentName, model);
         var decision = ManaGuard.Decide(snapshot, c5, c7, limits, now);
         if (decision == ManaDecision.Proceed) return PolicyDecision.Allow;
+        if (ManaGuard.PendingMessage(decision, snapshot, c5, c7, limits, now) is { } pending)
+        {
+            return PolicyDecision.Deny(PolicyRules.ManaShadowStart, pending + " Shadow erst nach dem frischen Stand starten.");
+        }
+
         var name = agentName.Length == 0 ? "unbekannt" : agentName;
         var five = snapshot.HasFiveHour
             ? FormattableString.Invariant($"5h {snapshot.Effective5h:0}% + {c5:0.#} (Grenze {limits.FiveHourPct:0.#}%, Reset {snapshot.FiveHourResetsAt.UtcDateTime:HH:mm} UTC)")
