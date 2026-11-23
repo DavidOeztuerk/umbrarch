@@ -156,6 +156,11 @@ internal static class MonarchApp
         gateMoveQuest.Options.Add(moveTo);
         gateMoveQuest.SetAction(r => GateCommands.MoveQuest(env, r.GetValue(moveQuest)!, r.GetValue(moveTo)!));
         gate.Subcommands.Add(gateMoveQuest);
+        var cleanupGate = new Argument<string>("id") { Description = "Gate id." };
+        var gateCleanup = new Command("cleanup", "After gate merge and a green gate check: commit the Monarch state in the gate worktree ([skip ci]), push the gate branch and remove the worktree without force (main only, from the main checkout).");
+        gateCleanup.Arguments.Add(cleanupGate);
+        gateCleanup.SetAction(r => GateCleanupCommands.Cleanup(env, r.GetValue(cleanupGate)!));
+        gate.Subcommands.Add(gateCleanup);
         root.Subcommands.Add(gate);
 
         var next = new Option<string?>("--next") { Description = "The next concrete step." };
