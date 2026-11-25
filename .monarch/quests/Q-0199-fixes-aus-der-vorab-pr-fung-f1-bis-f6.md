@@ -3,7 +3,7 @@ id: Q-0199
 gate: G-0130
 kind: main
 rank: A
-state: in_progress
+state: in_review
 dod:
   - "Spezifikation: Fix-Auftrag des Owners vom 25.11.2026 (monarch-proof/grok/fix-G0130-review.md), Abschnitte 1 bis 4 wörtlich; je Befund Test rot zuerst, Namen im PR"
   - "F1 (major, Schutzlücke): cd/pushd mit einer Option, die bash und zsh verschieden lesen (pushd -n, cd -e), hält im cwd-Modell altes und neues Verzeichnis; pushd -n /tmp; git commit im Haupt-Checkout wird verweigert"
@@ -18,5 +18,6 @@ scope:
   exclude: []
 estimate: { session_pct: 10, weekly_pct: 2, gold_usd: 0 }
 boss: "Die neuen Tests aus dem Auftrag (Dir_options_read_differently_by_bash_and_zsh_keep_the_main_checkout, Gate_plan_with_two_quests_from_one_gate_removes_both, Staged_files_outside_monarch_stop_the_cleanup, Refuses_in_the_main_checkout je carry und move-quest, Repairing_only_the_target_list_logs_no_QuestMoved) erst rot, dann grün; dotnet test grün"
+board: { pr: 163 }
 ---
 # Fixes aus der Vorab-Prüfung (F1 bis F6)
