@@ -40,7 +40,8 @@ public class RegelnTextTests
         var all = Skill();
         Assert.Contains("Reihenfolge je Gate", all, StringComparison.Ordinal);
         var text = all[all.IndexOf("Reihenfolge je Gate", StringComparison.Ordinal)..];
-        string[] steps = ["Worktree anlegen", "EnterWorktree", "gate_plan", "quest accept", "quest start", "TDD", "quest submit", "commit", "PR", "quest pr", "Warden", "verdict", "gate merge", "gate check", "evidence sync", "ExitWorktree", "git worktree remove"];
+        Assert.DoesNotContain("EnterWorktree", text[..text.IndexOf("gate_plan", StringComparison.Ordinal)], StringComparison.Ordinal);
+        string[] steps = ["Owner legt die Gate-Worktree", "worktree add --no-track", "startet die Session dort", "gate carry", "gate_plan", "quest accept", "quest start", "TDD", "quest submit", "commit", "PR", "quest pr", "Warden", "verdict", "gate merge", "gate check", "evidence sync", "ExitWorktree", "git worktree remove"];
         var positions = steps.Select(s => text.IndexOf(s, StringComparison.Ordinal)).ToArray();
         Assert.All(positions, p => Assert.True(p >= 0, "Checklistenschritt fehlt"));
         for (var i = 1; i < positions.Length; i++)
