@@ -16,5 +16,6 @@ scope:
   exclude: []
 estimate: { session_pct: 15, weekly_pct: 3, gold_usd: 0 }
 boss: "ReferenceTransactionHookTests: worktree add -b aus dem Haupt-Checkout erlaubt, checkout/switch/commit im Haupt-Checkout verweigert, update-ref --stdin mit develop und einer erlaubten Ref ganz abgelehnt; erst rot, dann grün"
+board: { pr: 163 }
 ---
 # Sandbox in den User-Settings, Hook-Regel enger (HEAD und Branch des Haupt-Checkouts)

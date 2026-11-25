@@ -110,12 +110,12 @@ Was die Claude-Code-Doku sagt (`code.claude.com/docs/en/sandboxing` und `code.cl
 
 Folgen (Zusammenfassung): Die Sandbox gilt für jede Session in jedem Projekt. Andere Projekte brauchen vielleicht weitere Domains; im Auto-Modus lehnt Claude Code fremde Hosts ab (Abschnitt „Hosts outside your allowed domains“). Mit `failIfUnavailable` startet Claude Code nicht, wenn die Sandbox nicht startet; laut settings-reference „Claude Code exits with an error at startup when `sandbox.enabled` is `true` but the sandbox can't start.“
 
-**Befehl für den Owner (Schicht 1).** Er legt zuerst eine Sicherung `~/.claude/settings.json.bak-<datum-zeit>` an und fügt dann mit python3 den Schlüssel `sandbox` ein. Er bricht ab, ohne etwas zu ändern, wenn die Datei fehlt, kein gültiges JSON ist oder `sandbox` schon existiert. Die Werte der anderen Schlüssel prüft er nach dem Schreiben; die Einrückung der Datei wird neu gesetzt. Gelöscht wird nichts. Getestet am 25.11.2026 an zwei Beispieldateien im Scratchpad: Einfügen, zweiter Lauf mit Abbruch, fehlende Datei mit Abbruch.
+**Befehl für den Owner (Schicht 1).** Er legt zuerst eine Sicherung `~/.claude/settings.json.bak-<datum-zeit>` an und fügt dann mit python3 den Schlüssel `sandbox` ein. Er bricht ab, ohne etwas zu ändern, wenn die Datei fehlt, kein gültiges JSON ist oder `sandbox` schon existiert. Die Werte der anderen Schlüssel prüft er nach dem Schreiben; die Einrückung der Datei wird neu gesetzt. Gelöscht wird nichts. Ist die Datei ein Symlink, ändert er das Ziel des Links, der Link bleibt. Getestet am 25.11.2026 im Scratchpad, in genau dieser Form unter zsh (nur der Pfad ersetzt): Einfügen, zweiter Lauf mit Abbruch, fehlende Datei mit Abbruch, Symlink (Link bleibt, Ziel bekommt `sandbox`).
 
 ```sh
 python3 -I - "$HOME/.claude/settings.json" <<'PY'
 import json, os, shutil, sys, time
-path = sys.argv[1]
+path = os.path.realpath(sys.argv[1])
 main = "/Users/davidozturk/Projects/umbrarch/.git/"
 block = {
     "enabled": True,
