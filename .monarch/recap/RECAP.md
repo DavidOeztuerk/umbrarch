@@ -1,10 +1,10 @@
 # RECAP
 
 ## Stand
-- Zeitpunkt: 2026-11-23T05:45:33Z
+- Zeitpunkt: 2026-11-25T12:03:53Z
 - Plan: Pro
-- Mana 5h: 16% (Limit 90%, Reset 2026-11-23T09:50:00Z)
-- Mana 7d: 93% (Limit 96%, Reset 2026-11-25T11:00:00Z)
+- Mana 5h: 68% (Limit 90%, Reset 2026-11-25T16:00:00Z)
+- Mana 7d: 9% (Limit 96%, Reset 2026-12-02T11:00:00Z)
 - Limits: 5h 90%, 7d 96% (plan default)
 
 ## Aktiv
@@ -33,7 +33,7 @@
 - Q-0150: Heikle Quest nach Standardregel 3: Warden-Runde über das Design vor dem Code, kein src-Code, kein anderer Test und keine andere Schwelle aufgeweicht, Schlussrunde des Wardens mit Verdict am Head-SHA
 
 ## Nächster konkreter Schritt
-G-0130 PR 163, Head 36bf906 (Q-0193 Fix 3 und Q-0194..Q-0198 vom externen Agenten, vom Owner committet). Schritt 1 erledigt: pull ff (already up to date), status nur eigene Ledger-Zeilen, ledger verify ok. Schritt 2 gestoppt: quest accept Q-0194 refused (7d 93% + 5% > 96%, Reset 2026-11-25T11:00Z). Weiter nach Owner-Auftrag 23.11.: Buchfuehrung Q-0194..Q-0198 (accept, start, submit, quest pr <Q> 163), Monarch-Stand committen (Kritiker, kein skip ci), gh pr checks 163, Warden-Schlussrunde origin/develop...HEAD (zaehlt als Code-Runde fuer Q-0193 Fix 3, Q-0194, Q-0195, Q-0197; Abweichungen laut Auftrag), gate verdict, Issue Nacharbeit G-0130, Kurzbericht, nicht mergen.
+G-0130 PR 163, Head 20a20c7, CI gruen. Q-0192..Q-0199 in_review. Warden-Schlussrunde changes (issuecomment-7161665432), gate verdict changes erfasst. Issue Nacharbeit G-0130 = #164. Nicht gemergt. Offen: 3 major der Schlussrunde (zsh-cd-Optionen und cd OLD NEW; gescheitertes cd und pushd +N; F3 Umbenennung mit --no-renames) -> Owner entscheidet: streng fixen oder Grenze im ADR, und wer fixt (Q-0200 oder externer Agent). Danach eine Delta-Runde, gate verdict, gate merge.
 
 ## Offene Entscheidungen
 - Owner: historische docs (ADR-0001..0018, lessons, evidence) bleiben? Default ja (Vorschlag)

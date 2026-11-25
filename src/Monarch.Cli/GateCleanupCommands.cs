@@ -94,6 +94,23 @@ internal static class GateCleanupCommands
             return Refuse(env, $"no green IntegrationRunChecked for {gateId} after its merge; run 'monarch gate check {gateId}' first.");
         }
 
+        // Only the Monarch state may go into the cleanup commit; anything staged before is the user's and stays out.
+        // --no-renames lists both paths of a staged rename; the check runs before any write.
+        var staged = RunGit(wt, "diff", "--cached", "--name-only", "--no-renames");
+        if (staged.Code != 0)
+        {
+            return Refuse(env, $"git diff --cached failed in {wt}; nothing was committed, pushed or removed: {staged.Err}");
+        }
+
+        var foreign = staged.Out
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(f => !f.StartsWith(".monarch/", StringComparison.Ordinal))
+            .ToList();
+        if (foreign.Count > 0)
+        {
+            return Refuse(env, $"files outside .monarch are staged in {wt}; nothing was committed, pushed or removed: {string.Join(", ", foreign)}");
+        }
+
         // Written once per merge, so a second call after an interrupted one has nothing new to commit.
         if (!rows.Any(r => r.Type == "GateCleanedUp" && r.Str("gate") == gateId && r.At >= merged.At))
         {
@@ -107,19 +124,9 @@ internal static class GateCleanupCommands
             return Refuse(env, $"git add .monarch failed in {wt}: {add.Err}");
         }
 
-        // Only the Monarch state may go into the cleanup commit; anything staged before is the user's and stays out.
-        var foreign = RunGit(wt, "diff", "--cached", "--name-only").Out
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(f => !f.StartsWith(".monarch/", StringComparison.Ordinal))
-            .ToList();
-        if (foreign.Count > 0)
-        {
-            return Refuse(env, $"files outside .monarch are staged in {wt}; nothing was committed, pushed or removed: {string.Join(", ", foreign)}");
-        }
-
         if (RunGit(wt, "diff", "--cached", "--quiet").Code != 0)
         {
-            var commit = RunGit(wt, "commit", "-m", $"{gateId}: Monarch-Stand nach Merge [skip ci]");
+            var commit = RunGit(wt, "commit", "-m", $"{gateId}: Monarch-Stand nach Merge [skip ci]", "--", ".monarch");
             if (commit.Code != 0)
             {
                 return Refuse(env, $"commit failed in {wt}; nothing was pushed or removed: {(commit.Err.Length > 0 ? commit.Err : commit.Out)}");

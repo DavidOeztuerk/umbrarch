@@ -9,6 +9,8 @@ public static partial class ToolCallPolicy
         "Der Haupt-Checkout bleibt unverändert (Standardregel 2). Arbeite in der Gate-Worktree: "
         + "`git worktree add .claude/worktrees/<G> -b monarch/<G>-<slug> origin/develop`, dann EnterWorktree.";
 
+    private const string AmbiguousReason = "Arbeitsverzeichnis nicht eindeutig (cd/pushd-Variante); nutze git -C <Gate-Worktree>.";
+
     private static PolicyDecision? ProtectMainCheckout(ToolCall call, PolicyContext ctx, List<BashAnalysis.Segment> segments, Canon paths)
     {
         if (call.ToolName != "Bash") return null;
@@ -19,6 +21,7 @@ public static partial class ToolCallPolicy
             var sub = BashAnalysis.GitSubcommand(seg.Tokens, out var si);
             if (sub is null || Array.IndexOf(MainCheckoutWriters, sub) < 0) continue;
             if (sub == "stash" && StashReads(seg.Tokens, si)) continue;
+            if (paths.AmbiguousAt(i)) return PolicyDecision.Deny(PolicyRules.ProtectMainCheckout, AmbiguousReason);
             if (TargetsMainCheckout(ctx, paths, segments, i, si)) return PolicyDecision.Deny(PolicyRules.ProtectMainCheckout, MainCheckoutReason);
         }
 

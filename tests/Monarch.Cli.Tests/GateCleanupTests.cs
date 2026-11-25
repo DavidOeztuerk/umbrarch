@@ -247,6 +247,34 @@ public class GateCleanupTests
         Assert.True(Directory.Exists(rig.Wt));
     }
 
+    /// <summary>A staged rename into .monarch shows only the new path without --no-renames; the old path must still stop the cleanup.</summary>
+    [Fact]
+    public void Staged_rename_into_monarch_names_the_old_path_and_stops_the_cleanup()
+    {
+        using var rig = new Rig();
+        MergedAndGreen(rig);
+        Git(rig.Wt, "mv", ".gitignore", ".monarch/gitignore-moved");
+        var r = rig.P.Run(["gate", "cleanup", "G-0001"]);
+        Assert.Equal(1, r.Code);
+        Assert.Contains(".gitignore", (r.Out + r.Err).Replace(".monarch/gitignore-moved", string.Empty), StringComparison.Ordinal);
+        Assert.Null(rig.RemoteTip());
+        Assert.True(Directory.Exists(rig.Wt));
+    }
+
+    /// <summary>The foreign-file check runs before the ledger row, so an abort leaves no GateCleanedUp behind.</summary>
+    [Fact]
+    public void An_aborted_check_writes_no_GateCleanedUp()
+    {
+        using var rig = new Rig();
+        MergedAndGreen(rig);
+        File.WriteAllText(Path.Combine(rig.Wt, "leak.txt"), "x");
+        Git(rig.Wt, "add", "leak.txt");
+        Assert.Equal(1, rig.P.Run(["gate", "cleanup", "G-0001"]).Code);
+        var ledger = Path.Combine(rig.Wt, ".monarch", "ledger");
+        var text = string.Concat(Directory.EnumerateFiles(ledger, "*.jsonl", SearchOption.AllDirectories).Select(File.ReadAllText));
+        Assert.DoesNotContain("GateCleanedUp", text, StringComparison.Ordinal);
+    }
+
     /// <summary>After the blocking file is gone, a second call removes the worktree and does not commit again.</summary>
     [Fact]
     public void Second_call_after_the_fix_removes_the_worktree_without_a_new_commit()

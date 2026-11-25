@@ -261,18 +261,9 @@ internal static class BashAnalysis
         foreach (var seg in segments)
         {
             var t = seg.Tokens;
-            if (seg.Word == "cd")
+            if (seg.Word is "cd" or "pushd")
             {
-                var i = CdOperandIndex(t);
-                if (i >= 0 && i < t.Length) list.Add((t[i], true));
-                continue;
-            }
-
-            if (seg.Word == "pushd")
-            {
-                var i = 1;
-                while (i < t.Length && t[i].StartsWith('-') && t[i].Length > 1) i++;
-                if (i < t.Length) list.Add((t[i], true));
+                if (ParseDirArgs(seg).Operands is [var first, ..]) list.Add((first, true));
                 continue;
             }
 
@@ -292,52 +283,32 @@ internal static class BashAnalysis
         return list;
     }
 
-    /// <summary>Ziel von <c>cd</c>/<c>pushd</c> (erstes Argument ohne Option); ohne Argument das Home-Verzeichnis (<c>~</c>).</summary>
-    public static string CdTarget(Segment seg)
-    {
-        var t = seg.Tokens;
-        var i = 1;
-        while (i < t.Length && t[i].StartsWith('-') && t[i].Length > 1) i++;
-        return i < t.Length ? t[i] : "~";
-    }
-
     /// <summary>
-    /// Ziel von <c>cd</c> wie bash: <c>-L</c>, <c>-P</c>, <c>-e</c>, <c>-@</c> (auch gebündelt) übersprungen, nach <c>--</c> wörtlich, ohne Ziel <c>~</c>,
-    /// <c>-</c> für OLDPWD. Bei einer unbekannten Option bricht bash ab: <c>null</c>, das cwd bleibt.
+    /// Argumente von <c>cd</c>/<c>pushd</c>: Operanden (nach <c>--</c> und nach dem ersten Operanden wörtlich), ob eine Option außer <c>-L</c>/<c>-P</c> dasteht
+    /// (auch zsh <c>-q</c>/<c>-s</c>) und ob <c>+N</c>/<c>-N</c> einen Stapeleintrag wählt. Unklar heißt nicht erlaubt: bash und zsh lesen das verschieden.
     /// </summary>
-    public static string? CdDestination(Segment seg)
+    public sealed record DirArgs(List<string> Operands, bool UncertainOption, bool StackSelect)
     {
-        var i = CdOperandIndex(seg.Tokens);
-        return i < 0 ? null : i < seg.Tokens.Length ? seg.Tokens[i] : "~";
+        /// <summary>Zwei Operanden (zsh ersetzt Text im PWD) oder Stapelwahl: Das Ziel ist nicht eindeutig.</summary>
+        public bool Ambiguous => StackSelect || Operands.Count > 1;
     }
 
-    /// <summary>Index des Ziels von <c>cd</c>; <c>-1</c> bei einer unbekannten Option, <c>t.Length</c> ohne Ziel.</summary>
-    private static int CdOperandIndex(string[] t)
+    public static DirArgs ParseDirArgs(Segment seg)
     {
-        var i = 1;
-        while (i < t.Length && IsCdOption(t[i])) i++;
-        if (i < t.Length && t[i] == "--") return i + 1;
-        if (i < t.Length && t[i].Length > 1 && t[i][0] == '-') return -1;
-        return i;
-    }
-
-    private static bool IsCdOption(string token) =>
-        token.Length > 1 && token[0] == '-' && token[1..].All(ch => ch is 'L' or 'P' or 'e' or '@');
-
-    /// <summary>
-    /// True, wenn <c>cd</c> oder <c>pushd</c> eine Option trägt, die bash und zsh verschieden lesen (alles außer <c>-L</c>/<c>-P</c>, etwa <c>pushd -n</c>
-    /// oder <c>cd -e</c>); das cwd-Modell hält dann das alte und das neue Verzeichnis.
-    /// </summary>
-    public static bool HasUncertainDirOption(Segment seg)
-    {
+        var ops = new List<string>();
+        var uncertain = false;
+        var stack = false;
+        var literal = false;
         foreach (var t in seg.Tokens.Skip(1))
         {
-            if (t == "--") return false;
-            if (t.Length < 2 || t[0] != '-') return false;
-            if (!t[1..].All(ch => ch is 'L' or 'P')) return true;
+            if (literal || ops.Count > 0) ops.Add(t);
+            else if (t == "--") literal = true;
+            else if (t.Length > 1 && (t[0] == '-' || t[0] == '+') && t[1..].All(char.IsAsciiDigit)) stack = true;
+            else if (t.Length > 1 && t[0] == '-') uncertain |= !t[1..].All(ch => ch is 'L' or 'P');
+            else ops.Add(t);
         }
 
-        return false;
+        return new DirArgs(ops, uncertain, stack);
     }
 
     /// <summary>Git-Unterkommando (nach Globaloptionen wie <c>-C dir</c>) und sein Index, sonst <c>null</c>.</summary>

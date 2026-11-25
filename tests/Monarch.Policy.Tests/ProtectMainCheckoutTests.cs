@@ -363,4 +363,44 @@ public sealed class ProtectMainCheckoutTests : IDisposable
 
     [Fact]
     public void Pushd_without_options_into_a_worktree_is_allowed() => Allow($"pushd {_wt}; git commit -m x", _main);
+
+    private const string AmbiguousReason = "Arbeitsverzeichnis nicht eindeutig (cd/pushd-Variante); nutze git -C <Gate-Worktree>.";
+
+    private void DenyAmbiguous(string cmd, string cwd)
+    {
+        Deny(cmd, cwd);
+        Assert.Equal(AmbiguousReason, Run(cmd, cwd).Reason);
+    }
+
+    [Theory]
+    [InlineData("cd -q {0}; git commit -m x")]
+    [InlineData("cd -s {0} && git commit -m x")]
+    [InlineData("pushd -q {0}; git commit -m x")]
+    public void Cd_with_an_option_other_than_L_and_P_keeps_old_and_new_directory(string template) => Deny(string.Format(template, _main), _wt);
+
+    [Theory]
+    [InlineData("cd /.claude/worktrees/G-1 /; git commit -m x")]
+    [InlineData("pushd /.claude/worktrees/G-1 /; git commit -m x")]
+    public void Cd_and_pushd_with_two_operands_are_not_unique(string cmd) => DenyAmbiguous(cmd, _wt);
+
+    [Fact]
+    public void Cd_to_a_missing_directory_keeps_the_old_one() => Deny($"cd {Path.Combine(_tmp, "fehlt")}; git commit -m x", _main);
+
+    [Theory]
+    [InlineData("pushd /tmp; pushd +1; git commit -m x")]
+    [InlineData("pushd /tmp; pushd -1; git commit -m x")]
+    [InlineData("pushd /tmp; cd +1; git commit -m x")]
+    [InlineData("pushd /tmp; popd +1; git commit -m x")]
+    public void Stack_selection_is_not_unique(string cmd) => DenyAmbiguous(cmd, _main);
+
+    [Fact]
+    public void Ambiguity_does_not_hit_read_only_git() => Allow("pushd /tmp; popd +1; git stash list", _wt);
+
+    [Fact]
+    public void Mkdir_then_cd_into_the_new_directory_in_a_worktree_is_allowed() =>
+        Allow("mkdir X && cd X && git commit -m x", _wt);
+
+    [Fact]
+    public void Ambiguity_inside_a_subshell_still_counts_afterwards() =>
+        Deny($"(pushd /tmp; pushd +1); git -C {_wt} commit -m x", _wt);
 }

@@ -31,6 +31,14 @@ public sealed class ProjectTargetsTests : IDisposable
         Assert.Contains(_rs.Resolve("main", _rs.Cwd), Locations(cmd));
 
     [Fact]
+    public void Cd_to_a_missing_directory_keeps_the_old_one_for_the_project_search() =>
+        Assert.Contains(_rs.Resolve("main", _rs.Cwd), Locations("cd /tmp/fehlt-" + Guid.NewGuid().ToString("N") + "; git -C main commit -m x"));
+
+    [Fact]
+    public void Cd_with_an_unknown_option_keeps_the_old_directory_for_the_project_search() =>
+        Assert.Contains(_rs.Resolve("main", _rs.Cwd), Locations("cd -q /tmp; git -C main commit -m x"));
+
+    [Fact]
     public void Locations_found_before_are_kept() =>
         Assert.Contains(_rs.Resolve("main", _rs.Resolve("/tmp", _rs.Cwd)), Locations("env -C /tmp sh -c true; git -C main commit -m x"));
 }
