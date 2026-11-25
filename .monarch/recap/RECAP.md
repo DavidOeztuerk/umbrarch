@@ -1,10 +1,10 @@
 # RECAP
 
 ## Stand
-- Zeitpunkt: 2026-11-25T20:41:23Z
+- Zeitpunkt: 2026-11-25T21:42:33Z
 - Plan: Pro
-- Mana 5h: 83% (Limit 90%, Reset 2026-11-25T21:00:00Z)
-- Mana 7d: 24% (Limit 96%, Reset 2026-12-02T11:00:00Z)
+- Mana 5h: 33% (Limit 90%, Reset 2026-11-26T02:00:00Z)
+- Mana 7d: 29% (Limit 96%, Reset 2026-12-02T11:00:00Z)
 - Limits: 5h 90%, 7d 96% (plan default)
 
 ## Aktiv
@@ -33,7 +33,7 @@
 - Q-0150: Heikle Quest nach Standardregel 3: Warden-Runde über das Design vor dem Code, kein src-Code, kein anderer Test und keine andere Schwelle aufgeweicht, Schlussrunde des Wardens mit Verdict am Head-SHA
 
 ## Nächster konkreter Schritt
-Owner-Entscheid 25.11. (nach Q-0201-Bericht): Owner legt KEINE Repo-settings.json an, Hook noch nicht installiert. Neu als Folge-Quest Q-0202 per gate_plan: (1) Sandbox in ~/.claude/settings.json (User): python3-Befehl mit Sicherung .bak-<datum>, Abbruch wenn sandbox existiert; denyWrite absolut /Users/davidozturk/Projects/umbrarch/.git/{HEAD,index,ORIG_HEAD,FETCH_HEAD,refs/heads/develop,refs/heads/main}; vorher aus Code+Doku ermitteln: allowWrite (~/.nuget, ~/.dotnet, ~/.local/share/NuGet, ~/.monarch – was schreibt monarch?), Domains (GitHub inkl. *.githubusercontent.com, NuGet inkl. CDN), gh-TLS/osxkeychain; KEINE excludedCommands vorsorglich. (2) Hook neu: develop/main immer; im Haupt-Checkout zusätzlich HEAD und Branch von HEAD; sonst erlaubt (worktree add -b aus Main); Tests rot zuerst inkl. update-ref --stdin mit zwei Refs. (3) Belege Gate-Öffnung heute (Datei:Zeile), Vorschlag mit Sandbox (Default: monarch gate open, allowWrite nur .claude/worktrees) – vorlegen. (4) ADR-0020 §1 + README anpassen. (7) Doku-Beleg Schreibbereich. (8) Vorschlag Session im Haupt-Checkout – vorlegen. Dann Kritiker, Commit, Push, CI, Kurzbericht mit ADR-Diff und zwei Befehlen in Reihenfolge. Kein Beweis vor Aktivierung, nicht mergen.
+Q-0202 committet (15a5c82, 0675857), gepusht, in_review. Wartet auf Owner: (1) python3-Befehl Schicht 1 aus ADR-0020 §1 in ~/.claude/settings.json, (2) Hook installieren (Quelle Q-0202), (3) Claude Code in G-0130 neu starten. Owner-Fragen offen: worktree-add-Abweichung (Lock-Heuristik), Gate öffnen, Session im Haupt-Checkout, Warden über Q-0201+Q-0202, Proben b/d vs Worktree-Isolation, Block-Einträge über die Vorgabe hinaus. Danach: Sandbox prüfen, Domains/Schreibpfade im Sandbox-Modus testen, Subagenten-Sandbox, Beweis Punkt 5, schmale Warden-Runde. Nicht mergen.
 
 ## Offene Entscheidungen
 - Owner: historische docs (ADR-0001..0018, lessons, evidence) bleiben? Default ja (Vorschlag)

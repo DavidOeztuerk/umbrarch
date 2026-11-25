@@ -6,8 +6,8 @@ public static partial class ToolCallPolicy
     private static readonly string[] MainCheckoutWriters = ["checkout", "switch", "reset", "merge", "pull", "commit", "rebase", "stash"];
 
     private const string MainCheckoutReason =
-        "Der Haupt-Checkout bleibt unverändert (Standardregel 2). Arbeite in der Gate-Worktree: "
-        + "`git worktree add .claude/worktrees/<G> -b monarch/<G>-<slug> origin/develop`, dann EnterWorktree.";
+        "Der Haupt-Checkout bleibt unverändert (Standardregel 2). Arbeite in der Gate-Worktree. Eine neue legt der Owner im eigenen Terminal an "
+        + "(`git -C <Haupt-Checkout> worktree add --no-track .claude/worktrees/<G> -b monarch/<G>-<slug> origin/develop`) und startet die Session dort.";
 
     /// <summary>Feste Sperrliste (ADR-0020 §1, Schicht 3): Wörter, mit denen sich der git-Hook umgehen ließe. Teilstring, ohne Beachtung der Schreibweise.</summary>
     private static readonly string[] BannedWords = ["hooksPath", "GIT_CONFIG", "CLAUDECODE"];

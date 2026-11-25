@@ -2,7 +2,7 @@
 
 - Status: Eine frühere Fassung hat der Warden für develop freigegeben (schmale Prüfung des Fixes, approve, PR #163, Kommentar `#issuecomment-7079968810`). Die jetzige Fassung mit dem Bedrohungsmodell vom 25.11.2026 (§1) ist weder vom Warden noch vom Owner freigegeben. Owner-Fragen siehe „Offen“.
 - Datum: 2026-11-22, §1 neu am 2026-11-25
-- Gate: G-0130, Quests Q-0192 bis Q-0202
+- Gate: G-0130, Quests Q-0192 bis Q-0204
 - Bezug: #46, #161, #74, #139, #16, #81, #44, #36, ADR-0003, ADR-0004, ADR-0007, ADR-0008, ADR-0010, ADR-0011, ADR-0012, ADR-0015, ADR-0018, ADR-0019
 - Fassung: Designrunde 1 (`#issuecomment-7078646801`), Delta-Runde (`#issuecomment-7079794677`), Fix und schmale Prüfung (`#issuecomment-7079968810`); §1 danach nach der Schlussrunde (`#issuecomment-7161665432`) und der Delta-Runde zu Q-0200 (`#issuecomment-7167800109`)
 
@@ -21,7 +21,7 @@ Alles Weitere in diesem Dokument ist technisches Design der Session. Wo es über
 
 ## Zusammenfassung (einfache Sprache)
 
-1. **Haupt-Checkout:** Drei Schichten sollen den Hauptordner eines Projekts mit Monarch schützen. Wirksam sind die ersten beiden erst, wenn der Owner sie aktiviert hat.
+1. **Haupt-Checkout:** Drei Schichten sollen den Hauptordner eines Projekts mit Monarch schützen. Die ersten beiden hat der Owner am 26.11.2026 aktiviert.
    - Die Sandbox von Claude Code steht in den User-Settings des Owners und gilt für jede Session. Bash schreibt nur im Arbeitsverzeichnis, im Temp-Ordner, in wenigen freigegebenen Ordnern und, aus einer Worktree, in Teilen von `.git`. HEAD, Index und die losen Refs von develop und main des Hauptordners sind gesperrt; `packed-refs` nicht.
    - Ein git-Hook verweigert in Claude-Code-Sessions jede Änderung an develop und main, im Hauptordner auch an HEAD und dessen Branch. Neue Gate-Branches bleiben möglich.
    - Der Monarch-Hook verweigert bei Bash weiter, ist dort aber nur Frühwarnung und keine Sicherheitsgrenze. Edit und Write in den Hauptordner verweigert er.
@@ -43,7 +43,7 @@ Nach der Delta-Runde zu Q-0200 (`#issuecomment-7167800109`, vier major) gilt der
 >
 > Neues Bedrohungsmodell für ADR-0020 §1: Der Haupt-Checkout wird auf OS- und git-Ebene geschützt. Der PreToolUse-Hook für Bash ist nur noch Frühwarnung und keine Sicherheitsgrenze.
 
-Q-0201 und Q-0202 setzen die Schichten 2 und 3 im Repo um. Schicht 1 fügt der Owner in seine User-Settings ein, den git-Hook installiert er selbst (Befehle unten). Stand 25.11.2026: beides noch nicht aktiviert. Die drei Schichten (Zusammenfassung):
+Q-0201 und Q-0202 setzen die Schichten 2 und 3 im Repo um. Schicht 1 fügt der Owner in seine User-Settings ein, den git-Hook installiert er selbst (Befehle unten). Am 26.11.2026 hat der Owner beides aktiviert; die Ergebnisse stehen unter „Test nach der Aktivierung“. Die drei Schichten (Zusammenfassung):
 
 1. **Schicht 1, OS-Sandbox:** Claude Code führt die Bash-Befehle jeder Session und ihrer Subagenten in einer Sandbox aus. Schreiben dürfen sie im Arbeitsverzeichnis, im Temp-Ordner, in den Pfaden aus `allowWrite` und, wenn das Arbeitsverzeichnis eine Worktree ist, im gemeinsamen `.git` des Haupt-Checkouts; dort liegen Objekte und Refs der Worktree. Im `.git` des Haupt-Checkouts sperrt `denyWrite` für jede Session `HEAD`, `index`, `ORIG_HEAD`, `FETCH_HEAD` und die losen Refs von develop und main. `packed-refs` bleibt aus einer Worktree schreibbar (Restrisiko unten).
 2. **Schicht 2, git-Hook `reference-transaction`:** git ruft ihn vor jeder Ref-Änderung auf. In einer Claude-Code-Session (`CLAUDECODE` nicht leer) verweigert er jede Änderung an `refs/heads/develop` und `refs/heads/main`, im Haupt-Checkout zusätzlich an `HEAD` und an der Branch, auf die dessen HEAD zeigt. Andere Refs sind erlaubt, auch neue Gate-Branches aus dem Haupt-Checkout.
@@ -58,7 +58,7 @@ Beleg zur Branch-Protection, Stand 25.11.2026 (`gh api repos/DavidOeztuerk/umbra
 Owner-Vorgaben vom 25.11.2026, wörtlich. Mit dem Bedrohungsmodell: „sandbox.enabled true, failIfUnavailable true, allowUnsandboxedCommands false.“ Nach dem Bericht zu Q-0201: „Schicht 1 kommt in meine User-Settings ~/.claude/settings.json, nicht ins Repo. Absolute Pfade, keine "..". Dann gilt die Sandbox für jede Session, auch im Haupt-Checkout, in älteren Worktrees und in anderen Projekten. Das ersetzt meine Vorgabe "in .claude/settings.json im Repo".“ und „denyWrite absolut für /Users/davidozturk/Projects/umbrarch/.git/{HEAD,index,ORIG_HEAD,FETCH_HEAD,refs/heads/develop,refs/heads/main}.“ Dazu: „Keine excludedCommands vorsorglich. Erst alles ohne Ausnahme planen; nach meiner Aktivierung testen; eine Ausnahme nur, wenn ein konkreter Fehler belegt ist und allowWrite/allowedDomains ihn nicht lösen. "gh api *" nie pauschal, nur konkrete Unterbefehle.“
 
 Was die Claude-Code-Doku sagt (`code.claude.com/docs/en/sandboxing` und `code.claude.com/docs/en/settings-reference`, gelesen am 25.11.2026; Zitate wörtlich, Abschnitt in Klammern):
-- **Schreibbereich:** „By default, sandboxed commands can write to the current working directory, the per-user temp directory“ (Configure sandboxing). In der Tabelle unter „What the sandbox restricts“ steht für Writes: „The working directory, a per-user temp directory, and directories you've added.“ `allowWrite` fügt Pfade hinzu: „Add paths where sandboxed commands can write, beyond the working directory, the per-user temp directory, and the directories you've added“. Ausdrücklich verboten nennt die Doku den Rest nicht; sie zählt nur die erlaubten Orte auf. Für eine Session in einer Gate-Worktree liegt der Arbeitsbaum des Haupt-Checkouts außerhalb dieser Orte. Bestätigen soll das der Beweis `touch <main>/SANDBOX-PROBE` nach der Aktivierung.
+- **Schreibbereich:** „By default, sandboxed commands can write to the current working directory, the per-user temp directory“ (Configure sandboxing). In der Tabelle unter „What the sandbox restricts“ steht für Writes: „The working directory, a per-user temp directory, and directories you've added.“ `allowWrite` fügt Pfade hinzu: „Add paths where sandboxed commands can write, beyond the working directory, the per-user temp directory, and the directories you've added“. Ausdrücklich verboten nennt die Doku den Rest nicht; sie zählt nur die erlaubten Orte auf. Für eine Session in einer Gate-Worktree liegt der Arbeitsbaum des Haupt-Checkouts außerhalb dieser Orte. Bestätigt hat das der Beweis `touch <main>/SANDBOX-PROBE` nach der Aktivierung („Test nach der Aktivierung“).
 - **Worktrees:** „when the working directory is a linked git worktree, the sandbox also allows writes to the main repository's shared `.git` directory“ und „Writes to `hooks/` and `config` inside that directory remain denied.“ (How sandboxing works > Filesystem isolation). Laut settings-reference gilt das auch für eine Worktree, „including one Claude Code entered mid-session“.
 - **Pfade in User-Settings:** `/` heißt „Absolute path from filesystem root“, `~/` heißt „Relative to home directory“ (Sandbox path prefixes).
 - **User- und Projekt-Settings:** „Claude Code merges them, combining the paths rather than replacing one scope's array with another's.“ (Configure sandboxing).
@@ -91,8 +91,7 @@ Was die Claude-Code-Doku sagt (`code.claude.com/docs/en/sandboxing` und `code.cl
     ]
   },
   "network": {
-    "allowedDomains": ["github.com", "api.github.com", "*.githubusercontent.com", "api.nuget.org"],
-    "allowUnixSockets": ["/private/tmp"]
+    "allowedDomains": ["github.com", "api.github.com", "*.githubusercontent.com", "api.nuget.org"]
   }
 }
 ```
@@ -101,7 +100,8 @@ Was die Claude-Code-Doku sagt (`code.claude.com/docs/en/sandboxing` und `code.cl
 - `denyWrite`: Owner-Vorgabe.
 - `~/.nuget/packages` und `~/.local/share/NuGet/http-cache`: die Standardorte von NuGet für Pakete und HTTP-Cache; beide Ordner gibt es. Bei einem Restore ohne neue Pakete blieben sie unverändert (`find … -mmin -14` nach `dotnet build --no-incremental`). Ohne die Einträge scheitert ein Restore, der neue Pakete lädt. `~/.nuget/NuGet` mit der Konfiguration bleibt gesperrt.
 - `~/.dotnet/TelemetryStorageService`: Dort schrieb dotnet beim Build eine Datei (`20261125210630_….trn`, derselbe `find`).
-- `/private/tmp` in `allowWrite` und `allowUnixSockets`: `lsof -U` während der Läufe zeigte Unix-Sockets unter `/tmp`, außerhalb von `$TMPDIR` (`/var/folders/…`). Bei `dotnet build` war es `/tmp/MSBuild…`, bei `dotnet test` `/tmp/<32 Hex>`. Beim Build entstand dazu ein Socket `/private/tmp/<43 Zeichen>`. Daneben öffneten dotnet und die Test-App je einen Socket `$TMPDIR/dotnet-diagnostic-…`; ob die Sandbox den braucht oder ob dotnet ohne ihn weiterläuft, ist offen. Ob `allowUnixSockets` einen Pfad oder ein Präfix meint, sagt die Doku nicht. Beides zeigt der Test nach der Aktivierung.
+- `/private/tmp` in `allowWrite`: `lsof -U` während der Läufe zeigte Unix-Sockets unter `/tmp`, außerhalb von `$TMPDIR` (`/var/folders/…`). Bei `dotnet build` war es `/tmp/MSBuild…`, bei `dotnet test` `/tmp/<32 Hex>`. Beim Build entstand dazu ein Socket `/private/tmp/<43 Zeichen>`.
+- Kein `allowUnixSockets`. Owner-Entscheid vom 26.11.2026, wörtlich: „Settings wie vorgeschlagen, aber OHNE "allowUnixSockets": ["/private/tmp"]. Grund: In /private/tmp liegen auf macOS der ssh-agent-Socket (com.apple.launchd.*/Listeners, SSH_AUTH_SOCK) und tmux-Sockets; die Freigabe wäre ein Weg aus der Sandbox.“ Was dotnet ohne die Freigabe tut, steht unter „Test nach der Aktivierung“.
 - `github.com`: git push und fetch über https (Remote `https://github.com/DavidOeztuerk/umbrarch.git`). `api.github.com`: gh und monarch (Host in `src/Monarch.Cli/Support.cs:176` und `src/Monarch.Infrastructure.Evidence/EvidenceBuilderExtensions.cs:20`). Beide stehen einzeln da, weil die Doku zur Basisdomain schweigt. `*.githubusercontent.com`: Owner-Vorgabe („GitHub inkl. *.githubusercontent.com“); welche Hosts gh dort braucht, zeigt der Test.
 - Alle Pfade sind absolut, wie es der Owner vorgibt („Absolute Pfade, keine ".."“).
 - `api.nuget.org`: einzige Quelle in `nuget.config:4-5` (`<clear />`, dann nuget.org). Der Service-Index (`https://api.nuget.org/v3/index.json`) nennt außerdem `azuresearch-usnc.nuget.org`, `azuresearch-ussc.nuget.org` und `www.nuget.org` für Suche und Webseiten. Einen eigenen CDN-Host nennt er nicht.
@@ -110,7 +110,7 @@ Was die Claude-Code-Doku sagt (`code.claude.com/docs/en/sandboxing` und `code.cl
 
 Folgen (Zusammenfassung): Die Sandbox gilt für jede Session in jedem Projekt. Andere Projekte brauchen vielleicht weitere Domains; im Auto-Modus lehnt Claude Code fremde Hosts ab (Abschnitt „Hosts outside your allowed domains“). Mit `failIfUnavailable` startet Claude Code nicht, wenn die Sandbox nicht startet; laut settings-reference „Claude Code exits with an error at startup when `sandbox.enabled` is `true` but the sandbox can't start.“
 
-**Befehl für den Owner (Schicht 1).** Er legt zuerst eine Sicherung `~/.claude/settings.json.bak-<datum-zeit>` an und fügt dann mit python3 den Schlüssel `sandbox` ein. Er bricht ab, ohne etwas zu ändern, wenn die Datei fehlt, kein gültiges JSON ist oder `sandbox` schon existiert. Die Werte der anderen Schlüssel prüft er nach dem Schreiben; die Einrückung der Datei wird neu gesetzt. Gelöscht wird nichts. Ist die Datei ein Symlink, ändert er das Ziel des Links, der Link bleibt. Getestet am 25.11.2026 im Scratchpad, in genau dieser Form unter zsh (nur der Pfad ersetzt): Einfügen, zweiter Lauf mit Abbruch, fehlende Datei mit Abbruch, Symlink (Link bleibt, Ziel bekommt `sandbox`).
+**Befehl für den Owner (Schicht 1).** Er legt zuerst eine Sicherung `~/.claude/settings.json.bak-<datum-zeit>` an und fügt dann mit python3 den Schlüssel `sandbox` ein. Er bricht ab, ohne etwas zu ändern, wenn die Datei fehlt, kein gültiges JSON ist oder `sandbox` schon existiert. Die Werte der anderen Schlüssel prüft er nach dem Schreiben; die Einrückung der Datei wird neu gesetzt. Gelöscht wird nichts. Ist die Datei ein Symlink, ändert er das Ziel des Links, der Link bleibt. Getestet am 25.11.2026 im Scratchpad unter zsh (nur der Pfad ersetzt), damals noch mit der Zeile `allowUnixSockets`: Einfügen, zweiter Lauf mit Abbruch, fehlende Datei mit Abbruch, Symlink (Link bleibt, Ziel bekommt `sandbox`). Ohne diese Zeile hat der Owner den Befehl am 26.11.2026 ausgeführt. Der Block in `~/.claude/settings.json` hat danach dieselben Werte wie der Inhalt oben (gelesen mit dem Read-Werkzeug am 26.11.2026, Zeilen 99-127). Anders als bei diesem Befehl steht dort `network` vor `filesystem`; die Reihenfolge der Schlüssel ändert in JSON nichts.
 
 ```sh
 python3 -I - "$HOME/.claude/settings.json" <<'PY'
@@ -127,7 +127,6 @@ block = {
     },
     "network": {
         "allowedDomains": ["github.com", "api.github.com", "*.githubusercontent.com", "api.nuget.org"],
-        "allowUnixSockets": ["/private/tmp"],
     },
 }
 if not os.path.isfile(path):
@@ -168,6 +167,40 @@ PY
 
 **Entfallen** mit den User-Settings: die Lücken „ältere Worktrees ohne Datei“ und „andere Projekte ohne Sandbox“. Eine Session in einem anderen Projekt kann weder den Arbeitsbaum noch das `.git` des Haupt-Checkouts schreiben, denn beide liegen außerhalb ihrer Schreiborte (Doku-Beleg oben; der Beweis nach der Aktivierung steht aus). Damit erledigt sich auch der Hinweis zu major 4 im Vermerk in #164 (`git checkout -- <pfad>` aus einem anderen Projekt).
 
+### Test nach der Aktivierung (26.11.2026)
+
+Session in der Gate-Worktree G-0130, Sandbox aus den User-Settings ohne `allowUnixSockets`, Hook installiert (`cmp` mit `plugin/git-hooks/reference-transaction`: identisch; `git config --get core.hooksPath`: Exit 1). Fehlertexte wörtlich.
+
+| Befehl | Ergebnis |
+|---|---|
+| `touch <main>/SANDBOX-PROBE` | „Operation not permitted“, Exit 1, keine Datei |
+| `: >> <main>/.git/index` | „operation not permitted“, Exit 1, Größe und Zeit des Index unverändert |
+| `dotnet build -warnaserror` | hängt; nach 10 min „Fehler beim Buildvorgang. 0 Warnung(en) 0 Fehler“, Exit 1 |
+| `dotnet build -warnaserror -m:1` oder `--disable-build-servers` allein | hängt nach über 3 min, abgebrochen |
+| `dotnet build -warnaserror --disable-build-servers -m:1 -nodeReuse:false` | grün, 0 Warnungen, 26,8 s |
+| `dotnet test --no-build --project tests/Monarch.Domain.Tests` | Exit 134, „System.Net.Sockets.SocketException (13): Permission denied“ in `TestApplication.WaitConnectionAsync` |
+| Test-Apps direkt (`tests/Monarch.<X>.Tests/bin/Debug/net10.0/Monarch.<X>.Tests`) | Domain 97, Policy 1443, Infrastructure 191 (1 übersprungen) ohne Fehler; Cli 755 mit 1 Fehler: `Real_ps_finds_the_hull_of_a_real_child_and_the_hook_leaves_it_running`, „An error occurred trying to start process '/bin/ps' … Operation not permitted“ |
+| `dotnet restore` ohne Änderung | „Alle Projekte sind für die Wiederherstellung auf dem neuesten Stand.“, Exit 0 |
+| `dotnet restore --force-evaluate --no-http-cache` | NU1900 „Der Dienstindex für die Quelle "https://api.nuget.org/v3/index.json" konnte nicht geladen werden.“, Exit 1 |
+| Kleines .NET-Programm, `HttpClient` mit `HttpClientHandler` wie `Support.cs` | api.github.com und api.nuget.org: „HttpRequestException: The SSL connection could not be established“, innen „AppleCommonCryptoCryptographicException“ |
+| `monarch quest list` | „forge not reachable for #29 (HttpRequestException), … #163 (HttpRequestException)“ |
+| `gh pr checks 163`, `gh auth status` | „tls: failed to verify certificate: x509: OSStatus -26276“ |
+| `curl https://api.github.com/zen`, `curl https://api.nuget.org/v3/index.json` | je HTTP 200 |
+| `git fetch origin` | Exit 0 |
+| `git push origin HEAD:refs/heads/monarch/G-0130-selbst-aufraeumen` (Ledger-Commit 9c2fea6) | „0675857..9c2fea6“, Exit 0; Anmeldung über den Schlüsselbund geht |
+| `monarch mana` | Exit 0 (lokal) |
+| Knight und Warden, je ohne und mit `isolation: worktree`: `touch <main>/SANDBOX-PROBE-<agent>` | je „Operation not permitted“, Exit 1, kein Hook-Deny |
+| dieselben: `touch ./.sandbox-probe-<agent>` im eigenen Arbeitsverzeichnis | je Exit 0; mit Isolation lag es unter `.claude/worktrees/agent-…` |
+| `mkdir .claude/skills` in der Gate-Worktree (`denyWrite` der Sandbox innerhalb des Arbeitsverzeichnisses, Pfad fehlt) | „Operation not permitted“ |
+| `mv .claude/probe-dir .claude/skills` | „rename … Operation not permitted“ |
+
+Lesart der Session:
+- Ohne Socket-Freigabe scheitern die Verbindungen von MSBuild zu Knoten und Build-Servern sowie von `dotnet test` zur Test-App. Die drei Schalter beim Build und der direkte Start der Test-Apps kommen ohne Freigabe aus. Den Socket-Pfad von `dotnet test` zeigt die Sandbox nicht, weil schon das Anlegen scheitert. Darum schlägt die Session keinen engen Socket-Pfad vor.
+- gh (Go) und .NET prüfen TLS über den Trust-Dienst von macOS und scheitern. curl und git kommen durch. Lösungsvorschlag unter „Offen“.
+- `/bin/ps` darf in der Sandbox nicht starten. Der Hook läuft außerhalb der Sandbox (Doku-Zusammenfassung oben); der eine rote Test ist eine Grenze der Sandbox und kein Fehler im Code.
+- Mit `isolation: worktree` legt Claude Code die Worktree auf `origin/HEAD` an (8caa41c, origin/main), nicht auf develop. Für die Dauer des Agenten stand die Agent-Worktree auch im Schreibbereich der Session. Nach dem Ende blieben beide Worktrees stehen.
+- `denyWrite` gilt auch für Pfade, die es noch nicht gibt, und für das Ziel einer Umbenennung (Grundlage für Option C unten). Nicht getestet ist das Umbenennen eines Ordners über einem gesperrten Pfad (etwa `.git/refs` mit `refs/heads/develop` darin). Das prüft der Warden gezielt.
+
 ### Schicht 2: git-Hook reference-transaction
 
 Owner-Vorgabe vom 25.11.2026, wörtlich:
@@ -192,7 +225,7 @@ Umgesetzt in Q-0202, mit einer Abweichung (unten, „Abweichung für `worktree a
 - `git checkout --detach`: `0000… <sha> HEAD`;
 - `git worktree add <pfad> -b monarch/G-9-x origin/develop` aus dem Haupt-Checkout: `0000… <sha> refs/heads/monarch/G-9-x` und `0000… ref:refs/heads/monarch/G-9-x HEAD`.
 
-**Abweichung für `worktree add`** (Vorschlag, braucht den Owner-Entscheid). `worktree add` schreibt das HEAD der neuen Worktree aus dem Haupt-Checkout heraus. Der Hook sieht dafür dieselbe Zeile wie bei `git checkout` und dasselbe git-dir. Die Regel „HEAD im Haupt-Checkout verweigern“ würde darum auch `worktree add -b` verweigern, das der Owner ausdrücklich erlaubt. Unterscheiden lassen sich die Fälle nur an den Lock-Dateien. Bei `worktree add` fehlt `.git/HEAD.lock`, dafür liegt `.git/worktrees/<name>/HEAD.lock` vor (Beobachtung des Knights). Ändert git das HEAD des Haupt-Checkouts, liegt `.git/HEAD.lock` vor. Das belegt der Test `Checkout_in_the_main_checkout_is_refused_even_with_a_planted_worktree_HEAD_lock`: Trotz einer vorgetäuschten `.git/worktrees/G-1/HEAD.lock` bleibt `checkout` im Haupt-Checkout verweigert. Das Skript erlaubt eine HEAD-Zeile im Haupt-Checkout darum nur, wenn `.git/HEAD.lock` fehlt und eine `.git/worktrees/*/HEAD.lock` existiert. Sonst verweigert es.
+**Abweichung für `worktree add`.** Owner-Entscheid vom 26.11.2026, wörtlich: „Lock-Lösung für worktree add: so lassen. Schicht 1 sperrt <main>/.git/HEAD zusätzlich. Der Warden prüft sie gezielt.“ `worktree add` schreibt das HEAD der neuen Worktree aus dem Haupt-Checkout heraus. Der Hook sieht dafür dieselbe Zeile wie bei `git checkout` und dasselbe git-dir. Die Regel „HEAD im Haupt-Checkout verweigern“ würde darum auch `worktree add -b` verweigern, das der Owner ausdrücklich erlaubt. Unterscheiden lassen sich die Fälle nur an den Lock-Dateien. Bei `worktree add` fehlt `.git/HEAD.lock`, dafür liegt `.git/worktrees/<name>/HEAD.lock` vor (Beobachtung des Knights). Ändert git das HEAD des Haupt-Checkouts, liegt `.git/HEAD.lock` vor. Das belegt der Test `Checkout_in_the_main_checkout_is_refused_even_with_a_planted_worktree_HEAD_lock`: Trotz einer vorgetäuschten `.git/worktrees/G-1/HEAD.lock` bleibt `checkout` im Haupt-Checkout verweigert. Das Skript erlaubt eine HEAD-Zeile im Haupt-Checkout darum nur, wenn `.git/HEAD.lock` fehlt und eine `.git/worktrees/*/HEAD.lock` existiert. Sonst verweigert es.
 - Das hängt am Dateiformat `files` für Refs. Mit `reftable` gibt es diese Lock-Dateien nicht. Für `reftable` müsste die Konfiguration des Repos geändert werden, und `config` im gemeinsamen `.git` sperrt die Sandbox.
 - Strengere Alternative: HEAD im Haupt-Checkout immer verweigern. Dann geht `worktree add -b` nur aus einer bestehenden Worktree (`git -C <wt> worktree add …`, Test `Documents_worktree_add_with_new_branch_from_a_worktree_with_CLAUDECODE`). Das wäre auch der Weg für `gate open` aus einer Gate-Worktree.
 
@@ -221,9 +254,11 @@ if [ -n "$(git config --get core.hooksPath)" ]; then echo "Abbruch: core.hooksPa
 - `git worktree remove <wt>` aus dem Haupt-Checkout bleibt erlaubt. Das braucht `gate cleanup` (`GateCleanupCommands.cs:142`).
 - `gate merge` ändert lokal weder develop noch main. Den Merge macht GitHub (`GitHubPulls.cs:124`, `PUT …/pulls/{n}/merge`).
 
-### Gate öffnen mit Sandbox (Vorschlag, dem Owner vorgelegt, nicht umgebaut)
+### Gate öffnen mit Sandbox
 
-**Heute.** Standardregel 2 (`plugin/skills/regeln/SKILL.md:10`): „Anlegen: `git worktree add .claude/worktrees/<G-xxxx> -b monarch/G-xxxx-<slug> origin/develop` … Danach **EnterWorktree mit `path`**.“ Danach folgt `gate carry` (`SKILL.md:20`, Checkliste `:63`). Der Pfad ist relativ zur Wurzel des Haupt-Checkouts. Die Session startet also im Haupt-Checkout, legt die Worktree selbst an und wechselt mit EnterWorktree hinein. Denselben Befehl nennt der Deny-Text von `protect_main_checkout` (`ProtectMainCheckoutRule.cs:8-10`). Einen Befehl `monarch gate open` gibt es nicht (`MonarchApp.cs`, keine Fundstelle).
+Owner-Entscheid vom 26.11.2026, wörtlich: „Gate öffnen: Übergang wie empfohlen. Ich lege Gate-Worktrees im eigenen Terminal an (git -C ~/Projects/umbrarch worktree add --no-track .claude/worktrees/<G> -b monarch/<G>-<slug> origin/develop) und starte die Session dort. Standardregel 2 in plugin/skills/regeln/SKILL.md und der Deny-Text in ProtectMainCheckoutRule.cs entsprechend anpassen. monarch gate open später als eigenes Issue.“ Umgesetzt: der Deny-Text in Q-0203. Standardregel 2 folgt in Q-0204, weil die Checkliste in `tests/Monarch.Cli.Tests/RegelnTextTests.cs:43` den Schritt „EnterWorktree“ verlangt und diese Datei nicht im Scope von Q-0203 liegt. Der Rest dieses Abschnitts ist die Vorlage für den Entscheid.
+
+**Heute.** Standardregel 2 (`plugin/skills/regeln/SKILL.md:10`): „Anlegen: `git worktree add .claude/worktrees/<G-xxxx> -b monarch/G-xxxx-<slug> origin/develop` … Danach **EnterWorktree mit `path`**.“ Danach folgt `gate carry` (`SKILL.md:20`, Checkliste `:63`). Der Pfad ist relativ zur Wurzel des Haupt-Checkouts. Die Session startet also im Haupt-Checkout, legt die Worktree selbst an und wechselt mit EnterWorktree hinein. Bis Q-0203 nannte der Deny-Text von `protect_main_checkout` denselben Befehl (`ProtectMainCheckoutRule.cs:8-10`). Einen Befehl `monarch gate open` gibt es nicht (`MonarchApp.cs`, keine Fundstelle).
 
 **Default des Owners**, wörtlich: „Sessions starten immer in einem Gate-Worktree; ein neues Worktree legt monarch gate open an, dafür allowWrite nur auf /Users/davidozturk/Projects/umbrarch/.claude/worktrees.“
 
@@ -235,7 +270,9 @@ Bewertung der Session (Vorschlag):
 - **Ohne neuen Code:** Der Owner legt jede Gate-Worktree im eigenen Terminal an (`git -C ~/Projects/umbrarch worktree add --no-track .claude/worktrees/<G> -b monarch/<G>-<slug> origin/develop`) und startet die Session dort. Dann braucht es kein `allowWrite` auf `.claude/worktrees`.
 - Empfehlung: `gate open` erst bauen, wenn der Test nach der Aktivierung `--no-track` und das gemeinsame `.git` bestätigt hat. Bis dahin legt der Owner die Worktree an, und `allowWrite` bleibt ohne `.claude/worktrees`.
 
-### Session im Haupt-Checkout (Vorschlag, dem Owner vorgelegt, nicht umgebaut)
+### Session im Haupt-Checkout
+
+Owner-Entscheid vom 26.11.2026, wörtlich: „Session im Haupt-Checkout: Option C (denyWrite auf die Liste der obersten Einträge des Haupt-Checkouts, ohne .git und .claude), erst nach einem Test der Pfad-Semantik in dieser Session. B nicht bauen. Ändern der User-Settings mache ich; du gibst mir den Befehl im selben Stil (Sicherung, Abbruch, nur filesystem.denyWrite ergänzen).“ Der Test der Pfad-Semantik steht unter „Test nach der Aktivierung“. Den Befehl legt die Session dem Owner im Bericht vor. Der Rest dieses Abschnitts ist die Vorlage für den Entscheid.
 
 Startet eine Session im Haupt-Checkout, kann Bash dessen Arbeitsbaum schreiben. Das ist die einzige Lage, in der das geht (Schicht 1 oben). Ein SessionStart-Hook kann die Session laut Hooks-Doku nicht sperren; laut Zusammenfassung der Doku hat er „No blocking or decision control“. Ein PreToolUse-Hook kann einen Aufruf mit Grund verweigern (`"permissionDecision": "deny"`, Abschnitt „How a hook resolves“). Optionen:
 - **A. Nur das Briefing** (heute eine Warnung, Q-0201). Vorteil: kein Code. Nachteil: Es ist nur ein Hinweis.
@@ -276,7 +313,7 @@ Lesart der Session (Vorschlag), über den Wortlaut hinaus: `cd +N`/`cd -N` (zsh)
 
 **Was ein Haupt-Checkout ist.** Das gefundene Git-Verzeichnis heißt `.git`, ist ein Verzeichnis und hat keine Datei `commondir`, ist also kein verknüpfter Worktree. Der Ordner darüber enthält ein Verzeichnis `.monarch` (erwecktes Projekt). Für `--work-tree` und `GIT_WORK_TREE`: `BranchGuard.FindGitDir(<Arbeitsbaum>)` und derselbe Test. So zählt auch ein Unterordner des Haupt-Checkouts, etwa `git --work-tree=<Haupt-Checkout>/src checkout -f -- .` aus einer Worktree. Ein Arbeitsbaum ohne Git-Verzeichnis darüber (etwa `/tmp/x`) ergibt keinen Kandidaten. Ein Worktree unter `.claude/worktrees/` hat eine `.git`-Datei. Sein Git-Verzeichnis liegt unter `.git/worktrees/<name>` und zählt nie.
 
-**Entscheidung.** Deny mit Regel `protect_main_checkout` und dem Weg: „Der Haupt-Checkout bleibt unverändert (Standardregel 2). Arbeite in der Gate-Worktree: `git worktree add .claude/worktrees/<G> -b monarch/<G>-<slug> origin/develop`, dann EnterWorktree.“ Das gilt für Main und Shadows gleich. Die Regel läuft in `Evaluate` und in `EvaluateProtection`, also auch, wenn der Haupt-Checkout nur Ziel eines Befehls ist, etwa `git -C ~/Projects/Noelia checkout main` aus einer anderen Session.
+**Entscheidung.** Deny mit Regel `protect_main_checkout` und dem Weg: „Der Haupt-Checkout bleibt unverändert (Standardregel 2). Arbeite in der Gate-Worktree. Eine neue legt der Owner im eigenen Terminal an (`git -C <Haupt-Checkout> worktree add --no-track .claude/worktrees/<G> -b monarch/<G>-<slug> origin/develop`) und startet die Session dort.“ (Text nach dem Owner-Entscheid „Gate öffnen“ vom 26.11.2026, Q-0203.) Das gilt für Main und Shadows gleich. Die Regel läuft in `Evaluate` und in `EvaluateProtection`, also auch, wenn der Haupt-Checkout nur Ziel eines Befehls ist, etwa `git -C ~/Projects/Noelia checkout main` aus einer anderen Session.
 
 **Ausnahme.** `git worktree add` zählt nicht, weil `worktree` nicht in der Liste steht. Dasselbe gilt für die anderen `worktree`-Unterbefehle (`list`, `remove`, `prune`). `worktree remove` braucht das Aufräumen (Abschnitt 6).
 
@@ -447,3 +484,4 @@ Befund ohne Umbau: Der Hook behandelt einen `general-purpose`-Agenten wie jeden 
 1. Weitere schreibende Git-Befehle im Haupt-Checkout sperren (`add`, `restore`, `clean`, `cherry-pick`, `revert`, `am`, `apply`, `mv`, `rm`, `branch -f`, `tag`, `update-ref`)? Owner-Entscheid vom 25.11.2026, wörtlich: „Nicht in diesem Gate. Als eigener Punkt in #164.“
 2. Status direkt nach dem Merge auf develop statt mit dem nächsten Gate: Das braucht eine Ausnahme im GitHub-Branchschutz von develop. Owner-Entscheid vom 25.11.2026, wörtlich: „Nein.“
 3. Laufende Neuberechnung der Shadow-Kosten aus neuen Läufen (Issue für v0.2). Owner-Entscheid vom 25.11.2026, wörtlich: „Issue, wie vorgeschlagen.“ Angelegt als #165.
+4. TLS unter Seatbelt (Vorschlag, Beleg unter „Test nach der Aktivierung“): `sandbox.enableWeakerNetworkIsolation: true` statt `excludedCommands`. Laut settings-reference: „Let sandboxed commands on macOS reach the system TLS trust service, `com.apple.trustd.agent`.“ und „This reduces security by opening a potential data exfiltration path through the trust service.“ Zu `excludedCommands` sagt die Sandbox-Doku: „run matching commands outside the sandbox, which means no filesystem restrictions and no network proxy“ und „An excluded command runs with your full access.“ Ein ausgenommenes `gh …` oder `monarch …` dürfte also auch den Haupt-Checkout schreiben. Die weichere Isolation öffnet nur den Trust-Dienst, Dateisystem und Domain-Liste bleiben. Offen bis zum Owner-Entscheid.

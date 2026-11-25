@@ -348,8 +348,10 @@ public sealed class ProtectMainCheckoutTests : IDisposable
     {
         var d = Run("git commit -m x", _main);
         Assert.Contains("Gate-Worktree", d.Reason);
-        Assert.Contains("git worktree add .claude/worktrees/<G> -b monarch/<G>-<slug> origin/develop", d.Reason);
-        Assert.Contains("EnterWorktree", d.Reason);
+        Assert.Contains("git -C <Haupt-Checkout> worktree add --no-track .claude/worktrees/<G> -b monarch/<G>-<slug> origin/develop", d.Reason);
+        Assert.Contains("im eigenen Terminal", d.Reason);
+        Assert.Contains("Session dort", d.Reason);
+        Assert.DoesNotContain("EnterWorktree", d.Reason);
     }
 
     [Theory]
