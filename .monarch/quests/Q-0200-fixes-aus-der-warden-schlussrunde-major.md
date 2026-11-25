@@ -3,7 +3,7 @@ id: Q-0200
 gate: G-0130
 kind: main
 rank: A
-state: in_progress
+state: in_review
 dod:
   - "Owner-Entscheide vom 25.11.2026 (Chat) zu den drei major der Schlussrunde (#issuecomment-7161665432); je Fall Test rot zuerst, Namen im PR"
   - "Grundsatz des Owners: unklar heißt nicht erlaubt, ohne jede Schreibweise einzeln nachzubauen"
@@ -19,5 +19,6 @@ scope:
   exclude: []
 estimate: { session_pct: 12, weekly_pct: 2, gold_usd: 0 }
 boss: "Neue Tests für jeden Fall aus der Schlussrunde (cd -q, cd -s, cd OLD NEW, pushd OLD NEW, cd zu fehlendem Ziel, pushd +1, cd +1, popd +1, git mv nach .monarch) erst rot, dann grün; dotnet test grün"
+board: { pr: 163 }
 ---
 # Fixes aus der Warden-Schlussrunde (Major 1 bis 3)
