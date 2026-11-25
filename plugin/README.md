@@ -68,6 +68,13 @@ Grundlage ist ADR-0011 (Bedrohungsmodell Phase 0). Der Hook ist eine **Leitplank
 - G2: die Policy ist auf plausiblen Wegen nicht still abschaltbar (`.monarch/system.yaml`, `quests/`, `gates/`, `local/`, `~/.monarch/**`, `~/.claude/settings*.json`, `~/.claude/plugins/**`, `<projekt>/.claude/settings*.json`).
 - G3: Ledger-Manipulation ist gegen plausible Fehlgriffe erkennbar. `ledger verify` laeuft vor `quest clear` und `evidence sync`; bei Befunden wird nicht geclear't (Event `ClearRefusedLedgerInvalid`). Anker-Resets quittiert nur der Owner im Terminal (`monarch ledger ack-reset <hash>` verlangt ein TTY auf stdin).
 
+### Haupt-Checkout (ADR-0020 §1, Q-0201)
+
+Den Haupt-Checkout sollen die Claude-Code-Sandbox (`.claude/settings.json`, legt der Owner an) und der git-Hook `plugin/git-hooks/reference-transaction` (installiert der Owner, Befehl in ADR-0020 §1) schuetzen. Beide wirken erst nach der Aktivierung durch den Owner. Die Regel `protect_main_checkout` im PreToolUse-Hook ist fuer Bash nur Fruehwarnung, keine Sicherheitsgrenze. Ihr cwd-Modell fuer `cd`, `pushd` und `popd` ist eingefroren. Edit, Write, MultiEdit und NotebookEdit laufen nicht in der Sandbox; gegen sie steht nur diese Regel, neben den Permission-Regeln von Claude Code. Grenzen:
+- Startet eine Session im Haupt-Checkout, darf Bash dort schreiben. Die Pfade aus `denyWrite` gelten relativ zur Projektwurzel und greifen dann nicht. Der SessionStart-Hook warnt.
+- Der git-Hook wirkt nur, wenn der Owner ihn in `.git/hooks` installiert hat, `core.hooksPath` nicht gesetzt ist und `CLAUDECODE` nicht leer ist. Er sieht nur Ref-Aenderungen, keine Dateien im Arbeitsbaum.
+- Restrisiko (Zusammenfassung; der Owner-Entscheid vom 25.11.2026 steht woertlich in ADR-0020 §1): Ein Skript, das `CLAUDECODE` entfernt und `core.hooksPath` umbiegt, kann ein gepacktes develop oder main lokal loeschen. Das Remote schuetzt die Branch-Protection auf GitHub.
+
 ### Secret-Scan-Hinweis (Q-0139)
 
 `monarch awaken` und `monarch status` (Text, `--json`, MCP `system_status`) melden, ob im Repo ein gitleaks-pre-commit-Hook aktiv ist, mit Zustand und Pfad: `aktiv`, `pre-commit-Hook ohne erkennbaren gitleaks-Aufruf`, `pre-commit-Hook nicht ausfuehrbar`, `kein pre-commit-Hook` oder `unbekannt` (kein git bzw. kein Repo). Umbrarch installiert den Hook nicht, schreibt nie in Hook-Verzeichnisse und ruft gitleaks nicht selbst auf.

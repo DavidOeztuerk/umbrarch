@@ -528,6 +528,12 @@ internal static class Briefing
         }
 
         sb.AppendLine("- Hooks erzwingen Scope-Lock, geschuetzte Pfade, Secrets und deny_bash.");
+        var dotGit = Path.Combine(paths.Root, ".git");
+        if (Directory.Exists(dotGit) && !File.Exists(Path.Combine(dotGit, "commondir")))
+        {
+            sb.AppendLine("Warnung: Diese Session läuft im Haupt-Checkout. Die Sandbox gibt hier den ganzen Haupt-Checkout zum Schreiben frei (ADR-0020 §1). Arbeite in der Gate-Worktree.");
+        }
+
         if (active is not null)
         {
             sb.AppendLine($"- {RuleTexts.Rule1}");

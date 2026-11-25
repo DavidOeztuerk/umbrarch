@@ -1,0 +1,35 @@
+#!/bin/sh
+# Monarch, ADR-0020 §1, Schicht 2: Ref-Aenderungen in Claude-Code-Sitzungen verweigern, wenn sie den
+# Haupt-Checkout betreffen oder refs/heads/develop bzw. refs/heads/main. Reines POSIX-sh, ohne monarch-Binary.
+# Entscheidung nur im Zustand "prepared"; ohne CLAUDECODE (Terminal des Owners) bleibt alles erlaubt.
+
+state="$1"
+
+# Stdin immer vollstaendig lesen (git schreibt sonst in eine geschlossene Pipe).
+# Ohne Beachtung der Schreibweise: auf macOS ist refs/heads/Develop dieselbe Datei wie refs/heads/develop.
+protected=0
+while read -r _old _new ref; do
+    lower=$(printf '%s\n' "$ref" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
+    case "$lower" in
+        refs/heads/develop | refs/heads/main) protected=1 ;;
+    esac
+done
+
+[ "$state" = "prepared" ] || exit 0
+[ -n "${CLAUDECODE:-}" ] || exit 0
+
+deny() {
+    echo "Ref-Aenderung verweigert (ADR-0020 §1): Haupt-Checkout oder refs/heads/develop|main. Arbeite in der Gate-Worktree." >&2
+    exit 1
+}
+
+[ "$protected" = 0 ] || deny
+
+gitdir=$(git rev-parse --git-dir 2>/dev/null) || deny
+common=$(git rev-parse --git-common-dir 2>/dev/null) || deny
+[ -n "$gitdir" ] && [ -n "$common" ] || deny
+gitdir=$(cd "$gitdir" 2>/dev/null && pwd -P) || deny
+common=$(cd "$common" 2>/dev/null && pwd -P) || deny
+[ -n "$gitdir" ] && [ -n "$common" ] || deny
+[ "$gitdir" != "$common" ] || deny
+exit 0

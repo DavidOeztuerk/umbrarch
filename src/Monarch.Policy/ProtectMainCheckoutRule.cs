@@ -9,11 +9,33 @@ public static partial class ToolCallPolicy
         "Der Haupt-Checkout bleibt unverändert (Standardregel 2). Arbeite in der Gate-Worktree: "
         + "`git worktree add .claude/worktrees/<G> -b monarch/<G>-<slug> origin/develop`, dann EnterWorktree.";
 
+    /// <summary>Feste Sperrliste (ADR-0020 §1, Schicht 3): Wörter, mit denen sich der git-Hook umgehen ließe. Teilstring, ohne Beachtung der Schreibweise.</summary>
+    private static readonly string[] BannedWords = ["hooksPath", "GIT_CONFIG", "CLAUDECODE"];
+
+    private const string BannedWordsReason =
+        "Der Bash-Befehl nennt hooksPath, GIT_CONFIG oder CLAUDECODE; damit ließe sich der git-Hook umgehen (ADR-0020 §1, Schicht 3). "
+        + "Suchen mit dem Grep-Werkzeug, Texte über eine Datei (git commit -F <datei>, gh … --body-file <datei>).";
+
+    private const string FileToolReason = "Der Haupt-Checkout bleibt unverändert (Standardregel 2). Ändere die Datei in der Gate-Worktree.";
+
+    /// <summary>Zielpfad per realpath auflösen (fehlende Komponenten bleiben lexikalisch), dann vom Zielverzeichnis aufwärts das nächste <c>.git</c> suchen.</summary>
+    private static bool FileToolTargetsMainCheckout(ToolCall call, PolicyContext ctx)
+    {
+        if (string.IsNullOrEmpty(call.FilePath)) return false;
+        var rs = new PathResolver(ctx.ProjectRoot, call.Cwd);
+        var abs = rs.Resolve(PathResolver.ExpandTilde(call.FilePath), rs.Cwd);
+        var dir = Path.GetDirectoryName(abs);
+        return dir is not null && IsMainCheckoutGitDir(BranchGuard.FindGitDir(dir));
+    }
+
     private const string AmbiguousReason = "Arbeitsverzeichnis nicht eindeutig (cd/pushd-Variante); nutze git -C <Gate-Worktree>.";
 
     private static PolicyDecision? ProtectMainCheckout(ToolCall call, PolicyContext ctx, List<BashAnalysis.Segment> segments, Canon paths)
     {
+        if (call.ToolName is "Edit" or "Write" or "MultiEdit" or "NotebookEdit") return FileToolTargetsMainCheckout(call, ctx) ? PolicyDecision.Deny(PolicyRules.ProtectMainCheckout, FileToolReason) : null;
         if (call.ToolName != "Bash") return null;
+        if (call.Command is { } text && BannedWords.Any(w => text.Contains(w, StringComparison.OrdinalIgnoreCase)))
+            return PolicyDecision.Deny(PolicyRules.ProtectMainCheckout, BannedWordsReason);
         for (var i = 0; i < segments.Count; i++)
         {
             var seg = segments[i];

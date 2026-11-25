@@ -403,4 +403,86 @@ public sealed class ProtectMainCheckoutTests : IDisposable
     [Fact]
     public void Ambiguity_inside_a_subshell_still_counts_afterwards() =>
         Deny($"(pushd /tmp; pushd +1); git -C {_wt} commit -m x", _wt);
+
+    // ---- ADR-0020 §1, Schicht 3: feste Sperrliste im Bash-Text ----
+
+    [Theory]
+    [InlineData("git -c core.hooksPath=/dev/null commit -m x")]
+    [InlineData("git -c core.hookspath=x commit -m x")]
+    [InlineData("GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null git commit -m x")]
+    [InlineData("GIT_CONFIG_PARAMETERS=\"'core.hooksPath=/x'\" git branch -D develop")]
+    [InlineData("env -u CLAUDECODE git commit -m x")]
+    [InlineData("CLAUDECODE= git branch -f develop HEAD")]
+    [InlineData("unset claudecode; git commit -m x")]
+    [InlineData("echo $ClaudeCode")]
+    public void Banned_words_in_the_bash_text_are_denied_everywhere(string cmd)
+    {
+        foreach (var cwd in new[] { _wt, _main, _tmp })
+        {
+            var d = Run(cmd, cwd);
+            Assert.True(d.Kind == PolicyDecisionKind.Deny && d.Rule == PolicyRules.ProtectMainCheckout, $"{cmd} (cwd {cwd}): {d.Kind} {d.Rule}");
+            Assert.Contains("Grep-Werkzeug", d.Reason, StringComparison.Ordinal);
+        }
+    }
+
+    [Theory]
+    [InlineData("git status")]
+    [InlineData("git commit -m x")]
+    public void Ordinary_commands_in_a_worktree_stay_allowed(string cmd) => Allow(cmd, _wt);
+
+    // ---- Datei-Tools gegen den Haupt-Checkout ----
+
+    private PolicyDecision RunFile(string tool, string path, string cwd) =>
+        ToolCallPolicy.Evaluate(new ToolCall(tool, FilePath: path, Cwd: cwd), Ctx());
+
+    private void DenyFile(string tool, string path, string cwd)
+    {
+        var d = RunFile(tool, path, cwd);
+        Assert.True(d.Kind == PolicyDecisionKind.Deny && d.Rule == PolicyRules.ProtectMainCheckout, $"{tool} {path}: {d.Kind} {d.Rule} {d.Reason}");
+    }
+
+    private static void Link(string link, string target)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(link)!);
+        if (Directory.Exists(target)) Directory.CreateSymbolicLink(link, target);
+        else File.CreateSymbolicLink(link, target);
+    }
+
+    [Theory]
+    [InlineData("Write")]
+    [InlineData("Edit")]
+    [InlineData("MultiEdit")]
+    [InlineData("NotebookEdit")]
+    public void File_tools_aimed_at_the_main_checkout_are_denied(string tool)
+    {
+        DenyFile(tool, Path.Combine(_main, "src", "a.cs"), _wt);
+        DenyFile(tool, Path.Combine(_main, "neu", "tief", "a.cs"), _wt);
+    }
+
+    [Fact]
+    public void Write_inside_a_worktree_is_allowed() =>
+        Assert.NotEqual(PolicyRules.ProtectMainCheckout, RunFile("Write", Path.Combine(_wt, "src", "a.cs"), _wt).Rule);
+
+    [Fact]
+    public void Write_through_a_symlinked_directory_into_the_main_checkout_is_denied()
+    {
+        Link(Path.Combine(_wt, "lnk"), Path.Combine(_main, "src"));
+        DenyFile("Write", Path.Combine(_wt, "lnk", "a.cs"), _wt);
+    }
+
+    [Fact]
+    public void Edit_of_a_symlinked_file_pointing_into_the_main_checkout_is_denied()
+    {
+        File.WriteAllText(Path.Combine(_main, "x.cs"), "x");
+        Link(Path.Combine(_wt, "datei.cs"), Path.Combine(_main, "x.cs"));
+        DenyFile("Edit", Path.Combine(_wt, "datei.cs"), _wt);
+    }
+
+    [Fact]
+    public void Write_outside_any_repo_is_allowed()
+    {
+        var d = RunFile("Write", Path.Combine(_tmp, "scratch", "a.txt"), _wt);
+        Assert.NotEqual(PolicyRules.ProtectMainCheckout, d.Rule);
+        Assert.NotEqual(PolicyRules.ProtectMainCheckout, RunFile("Write", Path.Combine(_plain, "src", "a.cs"), _wt).Rule);
+    }
 }

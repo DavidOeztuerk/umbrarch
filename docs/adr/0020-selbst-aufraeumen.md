@@ -1,10 +1,10 @@
 # ADR-0020: Selbst aufräumen (v0.2 Teil 1)
 
-- Status: Design vom Warden freigegeben für develop (schmale Prüfung des Fixes, approve, PR #163, Kommentar `#issuecomment-7079968810`); Owner-Fragen siehe „Offen“
-- Datum: 2026-11-22
-- Gate: G-0130, Quests Q-0192 bis Q-0198
+- Status: Eine frühere Fassung hat der Warden für develop freigegeben (schmale Prüfung des Fixes, approve, PR #163, Kommentar `#issuecomment-7079968810`). Die jetzige Fassung mit dem Bedrohungsmodell vom 25.11.2026 (§1) ist weder vom Warden noch vom Owner freigegeben. Owner-Fragen siehe „Offen“.
+- Datum: 2026-11-22, §1 neu am 2026-11-25
+- Gate: G-0130, Quests Q-0192 bis Q-0201
 - Bezug: #46, #161, #74, #139, #16, #81, #44, #36, ADR-0003, ADR-0004, ADR-0007, ADR-0008, ADR-0010, ADR-0011, ADR-0012, ADR-0015, ADR-0018, ADR-0019
-- Fassung: Designrunde 1 (`#issuecomment-7078646801`), Delta-Runde (`#issuecomment-7079794677`), Fix und schmale Prüfung (`#issuecomment-7079968810`)
+- Fassung: Designrunde 1 (`#issuecomment-7078646801`), Delta-Runde (`#issuecomment-7079794677`), Fix und schmale Prüfung (`#issuecomment-7079968810`); §1 danach nach der Schlussrunde (`#issuecomment-7161665432`) und der Delta-Runde zu Q-0200 (`#issuecomment-7167800109`)
 
 ## Owner-Vorgaben
 
@@ -21,14 +21,94 @@ Alles Weitere in diesem Dokument ist technisches Design der Session. Wo es über
 
 ## Zusammenfassung (einfache Sprache)
 
-1. **Haupt-Checkout:** Im Hauptordner eines Projekts mit Monarch lehnt der Hook acht schreibende Git-Befehle ab. Gearbeitet wird nur in der Gate-Worktree. Neue Worktrees anlegen geht weiter.
+1. **Haupt-Checkout:** Drei Schichten sollen den Hauptordner eines Projekts mit Monarch schützen. Wirksam sind die ersten beiden erst, wenn der Owner sie aktiviert hat.
+   - Läuft die Session in der Gate-Worktree, lässt die Sandbox von Claude Code Bash nur dort schreiben, dazu im Temp-Ordner und in Teilen von `.git`.
+   - Ein git-Hook verweigert in Claude-Code-Sessions Ref-Änderungen im Hauptordner und an develop und main.
+   - Der Monarch-Hook warnt bei Bash nur noch früh. Edit und Write in den Hauptordner verweigert er.
+
+   Gearbeitet wird nur in der Gate-Worktree.
 2. **Mana bei Shadows:** Vor dem Start eines Shadows prüft der Hook, ob dessen typische Kosten noch unter die Grenze passen. Die Kosten sind aus den Ledgern gemessen. Erreicht ein laufender Shadow die Grenze, bekommt er keine Werkzeuge mehr und meldet seinen Stand als unvollständig. Ohne frischen Stand (headless) bremst nur der letzte bekannte Wert.
 3. **Nach dem Reset:** Zeigt der Stand ein Fenster, das schon zurückgesetzt ist, sagt Monarch „Reset erfolgt, Stand wird erneuert“. Die Session prüft dann jede Minute neu, höchstens 10 Minuten lang (Vorschlag). Der Weckruf kommt eine Minute nach dem Reset (selten zwei, wegen der Jitter-Minuten) statt nach drei.
 4. **Status auf develop:** develop nimmt keinen Commit ohne grüne Pflicht-Checks an. Der Stand nach dem Merge kommt darum erst mit dem nächsten Gate nach develop: Ein neuer Befehl holt ihn in die neue Worktree (Vorschlag, Offen 2).
 5. **Quest verschieben:** Ein Befehl hängt eine Quest in ein anderes Gate um, in beiden Gate-Dateien und in der Quest-Datei, und schreibt das ins Ledger.
 6. **Aufräumen:** Ein Befehl erledigt das Aufräumen nach dem Merge: committen, pushen, Worktree entfernen, ohne `--force`.
 
-## 1. Regel protect_main_checkout
+## 1. Haupt-Checkout schützen
+
+### Bedrohungsmodell
+
+Nach der Delta-Runde zu Q-0200 (`#issuecomment-7167800109`, vier major) gilt der Owner-Entscheid vom 25.11.2026, wörtlich:
+
+> Root Cause: Shell-Parsing ist die falsche Ebene für protect_main_checkout. zsh-Semantik ist durch statische Analyse nicht vollständig vorhersagbar, deshalb findet jede Runde neue Schreibweisen. Ich will keine weitere Runde über cd/pushd-Schreibweisen und keine Positivliste.
+>
+> Neues Bedrohungsmodell für ADR-0020 §1: Der Haupt-Checkout wird auf OS- und git-Ebene geschützt. Der PreToolUse-Hook für Bash ist nur noch Frühwarnung und keine Sicherheitsgrenze.
+
+Q-0201 setzt die Schichten 2 und 3 im Repo um. Aktivieren muss sie der Owner: Er legt `.claude/settings.json` an (Schicht 1) und installiert den git-Hook (Schicht 2). Stand 25.11.2026: noch nicht aktiviert. Die drei Schichten (Zusammenfassung):
+
+1. **Schicht 1, OS-Sandbox:** Claude Code führt die Bash-Befehle der Session und ihrer Subagenten in einer Sandbox aus. Schreiben dürfen sie im Arbeitsverzeichnis, im Temp-Ordner und, wenn das Arbeitsverzeichnis eine Worktree ist, im gemeinsamen `.git` des Haupt-Checkouts; dort liegen Objekte und Refs der Worktree. Im `.git` sperrt die Sandbox `HEAD`, `index`, `ORIG_HEAD`, `FETCH_HEAD` und die losen Refs von develop und main. `packed-refs` bleibt schreibbar (Restrisiko unten).
+2. **Schicht 2, git-Hook `reference-transaction`:** git ruft ihn vor jeder Ref-Änderung auf. In einer Claude-Code-Session (`CLAUDECODE` nicht leer) verweigert er jede Ref-Änderung im Haupt-Checkout und jede Änderung an `refs/heads/develop` und `refs/heads/main`, auch aus einer Worktree.
+3. **Schicht 3, PreToolUse-Hook:** Bei Bash Frühwarnung mit einem lesbaren Grund, keine Sicherheitsgrenze. Das cwd-Modell für `cd`, `pushd` und `popd` ist eingefroren. Edit, Write, MultiEdit und NotebookEdit laufen nicht in der Sandbox. Gegen sie steht nur diese Regel, neben den Permission-Regeln von Claude Code (Abschnitt Schicht 3).
+
+**Restrisiko**, Owner-Entscheid vom 25.11.2026, wörtlich: „Vorsätzliches Umgehen per Skript, das CLAUDECODE entfernt und core.hooksPath umbiegt, kann ein gepacktes develop/main lokal löschen; das Remote schützt die GitHub-Branch-Protection.“
+
+Beleg zur Branch-Protection, Stand 25.11.2026 (`gh api repos/DavidOeztuerk/umbrarch/branches/develop/protection`, dasselbe für `main`): Beide Branches haben `allow_deletions: false`, `allow_force_pushes: false`, `enforce_admins: true` und Pflicht-Checks. main hat zusätzlich `lock_branch: true`.
+
+### Schicht 1: Sandbox
+
+Owner-Vorgabe vom 25.11.2026, wörtlich: „sandbox.enabled true, failIfUnavailable true, allowUnsandboxedCommands false.“ und „filesystem.denyWrite (absolut, über den Haupt-Checkout aufgelöst, nicht hart auf meinen Pfad, wenn das sauber geht; sonst dokumentieren): <main>/.git/HEAD, <main>/.git/index, <main>/.git/ORIG_HEAD, <main>/.git/FETCH_HEAD, <main>/.git/refs/heads/develop, <main>/.git/refs/heads/main.“
+
+Was die Claude-Code-Doku dazu sagt (`code.claude.com/docs/en/sandboxing` und `settings-reference`, gelesen am 25.11.2026, Zusammenfassung):
+- Schreibbar sind das Arbeitsverzeichnis mit seinen Unterordnern und `$TMPDIR`. Ist das Arbeitsverzeichnis eine verknüpfte Worktree, ist auch das gemeinsame `.git` des Haupt-Repos schreibbar, außer `hooks/` und `config`.
+- `.claude`-Settings im Arbeitsverzeichnis und darüber kann Bash nicht ändern.
+- Subagenten laufen im selben Prozess und mit derselben Sandbox wie die Session.
+- Hooks laufen außerhalb der Sandbox. Die Datei-Werkzeuge (Edit, Write) folgen den Permission-Regeln, nicht der Sandbox.
+- Relative Pfade in `sandbox.filesystem` gelten gegen die Projektwurzel. Ob `..` aufgelöst wird, sagt die Doku nicht.
+
+**Datei.** `.claude/settings.json` im Repo, damit jede Gate-Worktree von develop sie mitbringt. `.monarch/system.yaml:25` schützt `.claude/settings*.json` (protect_paths). Den Write der Session hat der Hook am 25.11.2026 verweigert. Die Datei legt darum der Owner an.
+
+**Pfade (Vorschlag).** `../../../.git/<Datei>` relativ zur Projektwurzel. Für eine Gate-Worktree unter `<main>/.claude/worktrees/<G>` (Standardregel 2) ist das `<main>/.git/<Datei>`, ohne den Pfad des Owners im Repo. Für Worktrees in anderer Tiefe und für eine Session im Haupt-Checkout zeigt der Pfad an die falsche Stelle. Ob die Sandbox `..` auflöst, soll der Beweis am echten System nach der Aktivierung zeigen (Stand 25.11.2026: offen). Greift es nicht, braucht es absolute Pfade, und die hängen am Pfad des Owners.
+
+**Lücke: Session im Haupt-Checkout.** Nichts hindert eine Session daran, im Haupt-Checkout zu starten. Dann ist der Haupt-Checkout ihr Arbeitsverzeichnis, und Bash darf dort schreiben. Die sechs Pfade aus `denyWrite` greifen dann nicht, weil sie relativ zur Projektwurzel gelten. Gesperrt bleibt nur, was die Sandbox selbst sperrt, etwa die `.claude`-Settings. Refs schützt dann nur Schicht 2. Dateien im Arbeitsbaum schützt bei Bash keine Schicht; Edit und Write verweigert Schicht 3. Der SessionStart-Hook warnt in diesem Fall (Q-0201). Bis die Datei über develop im Haupt-Checkout liegt, haben Sessions dort und in Worktrees älterer Branches gar keine Sandbox.
+
+### Schicht 2: git-Hook reference-transaction
+
+Owner-Vorgabe vom 25.11.2026, wörtlich:
+
+> - Nur im Zustand "prepared" entscheiden, sonst exit 0.
+> - CLAUDECODE leer → exit 0 (mein Terminal bleibt unberührt).
+> - Sonst verweigern, wenn git-dir == git-common-dir (Haupt-Checkout) oder eine Ref refs/heads/develop oder refs/heads/main ist. Meldung mit Verweis auf ADR-0020 §1.
+> - Der bestehende .git/hooks/pre-commit (gitleaks) bleibt unverändert.
+> - Installation in .git/hooks macht NICHT der Agent. Die Sandbox sperrt das ohnehin. Gib mir einen Befehl, den ich selbst im Terminal ausführe, mit Prüfung, dass nichts Vorhandenes überschrieben wird.
+
+**Skript.** `plugin/git-hooks/reference-transaction`, reines sh ohne monarch-Binary. Kann es git-dir oder git-common-dir nicht bestimmen, verweigert es (Vorschlag, nach dem Grundsatz „unklar heißt nicht erlaubt“). Es wirkt nur, wenn `core.hooksPath` nicht gesetzt ist. Am 25.11.2026 war es nirgends gesetzt (`git config --show-origin --get-all core.hooksPath`: keine Ausgabe, Exit 1). Die Namen `refs/heads/develop` und `refs/heads/main` vergleicht es ohne Beachtung der Schreibweise (Vorschlag), denn auf macOS ist `refs/heads/Develop` dieselbe Datei wie `refs/heads/develop`.
+
+**Installation (Owner, im eigenen Terminal, im Haupt-Checkout).** `<quelle>` ist das Skript aus einem Checkout mit Q-0201, etwa `.claude/worktrees/G-0130/plugin/git-hooks/reference-transaction` oder nach dem Merge `plugin/git-hooks/reference-transaction`. Der Befehl bricht ab, wenn `core.hooksPath` gesetzt ist oder schon ein Hook dieses Namens existiert:
+
+```sh
+hook="$(git rev-parse --git-common-dir)/hooks/reference-transaction"; src=<quelle>
+if [ -n "$(git config --get core.hooksPath)" ]; then echo "Abbruch: core.hooksPath ist gesetzt"; elif [ -e "$hook" ]; then echo "Abbruch: $hook existiert"; else install -m 0755 "$src" "$hook" && cmp "$src" "$hook" && ls -l "$hook"; fi
+```
+
+**Tests** (`tests/Monarch.Cli.Tests/ReferenceTransactionHookTests.cs`, temporäre Repos mit Remote und verknüpfter Worktree, Hook nach `.git/hooks` kopiert):
+- Mit `CLAUDECODE=1` verweigert: Commit im Haupt-Checkout; `branch -f develop` und `branch -D develop` (gepackt) aus der Worktree; `update-ref` auf `refs/heads/Develop`, `refs/heads/MAIN` und `refs/HEADS/develop` aus der Worktree.
+- Mit `CLAUDECODE=1` erlaubt: Commit in der Worktree; `fetch` aus der Worktree.
+- Ohne `CLAUDECODE` erlaubt: Commit im Haupt-Checkout, `branch -f develop`, `branch -D develop` (gepackt).
+
+**Folgen für Abläufe** (dem Owner vorgelegt, nicht umgebaut; Beleg: Tests `Documents_…` in derselben Datei, git 2.54 auf macOS):
+- `git worktree add <pfad> -b monarch/<G>-<slug> origin/develop` aus dem Haupt-Checkout verweigert der Hook, denn die neue Ref entsteht dort mit git-dir == git-common-dir. Das ist der Weg aus Standardregel 2 und aus dem Deny-Text von `protect_main_checkout`. Aus einer bestehenden Worktree (`git -C <wt> worktree add …`) lässt der Hook ihn zu.
+- `git worktree remove <wt>` aus dem Haupt-Checkout bleibt erlaubt. Das braucht `gate cleanup` (`GateCleanupCommands.cs:142`).
+- `gate merge` ändert lokal weder develop noch main. Den Merge macht GitHub (`GitHubPulls.cs:124`, `PUT …/pulls/{n}/merge`).
+
+### Schicht 3: PreToolUse-Hook (Frühwarnung)
+
+Owner-Vorgabe vom 25.11.2026, wörtlich: „Bash-cwd-Modell einfrieren, keine Änderung an der cd-Logik.“, „Neu nur eine feste Sperrliste im Bash-Text: hooksPath, GIT_CONFIG, CLAUDECODE (Groß-/Kleinschreibung egal), mit Tests.“ und „Edit/Write/NotebookEdit: prüfen, dass der Pfad per realpath gegen den Haupt-Checkout geprüft wird (Symlinks). Wenn nicht, ergänzen.“
+
+Umsetzung in Q-0201 (`src/Monarch.Policy/ProtectMainCheckoutRule.cs`):
+- **Sperrliste:** Ein Bash-Befehl, dessen Text `hooksPath`, `GIT_CONFIG` oder `CLAUDECODE` enthält (Teilstring, Schreibweise egal), wird verweigert, egal wo das cwd liegt. Der Grund nennt den Weg: Suchen mit dem Grep-Werkzeug, Texte über eine Datei (`git commit -F <datei>`, `gh … --body-file <datei>`).
+- **Datei-Werkzeuge:** Für Edit, Write, MultiEdit und NotebookEdit löst die Regel den Zielpfad über Symlinks auf (`PathResolver.Resolve`; fehlende Teile bleiben, wie sie sind). Dann sucht sie vom Zielordner aufwärts das nächste `.git`. Ist das ein Haupt-Checkout, verweigert sie. Pfade in einer Worktree und außerhalb jedes Repos bleiben erlaubt. Die Datei-Werkzeuge laufen nicht in der Sandbox (Schicht 1). Gegen Schreiben in den Haupt-Checkout per Edit oder Write steht darum nur diese Regel, neben den Permission-Regeln von Claude Code.
+- **SessionStart:** Läuft die Session im Haupt-Checkout, warnt das Briefing (`src/Monarch.Cli/HookRunner.cs`).
+
+Die folgenden Absätze beschreiben die Regel `protect_main_checkout` für Bash im eingefrorenen Stand nach Q-0200.
 
 **Was zählt.** Ein Bash-Segment mit dem Wort `git` und einem dieser Unterbefehle: `checkout`, `switch`, `reset`, `merge`, `pull`, `commit`, `rebase`, `stash`. Den Unterbefehl bestimmt `BashAnalysis.GitSubcommand` wie bei `protect_branches`; globale Optionen wie `-c` oder `--no-pager` davor zählen nicht. `git stash list` und `git stash show` lesen nur und zählen nicht (Vorschlag: Lesart von „schreibende Git-Befehle“).
 
@@ -44,6 +124,8 @@ Anders als bei `FindRepos` (`ProtectBranchesRule.cs:205-245`, dort ersetzen `--g
 - Ziel existiert nicht: das alte Verzeichnis und das Ziel (Vereinigung). Dafür braucht es keinen Lexer für &&.
 - cd mit zwei Operanden, pushd +N/-N und popd +N/-N: protect_main_checkout verweigert jeden schreibenden git-Befehl, der in diesem Befehl danach kommt. Grund: „Arbeitsverzeichnis nicht eindeutig (cd/pushd-Variante); nutze git -C <Gate-Worktree>.““
 Umgesetzt in Q-0200.
+
+Die vier major der Delta-Runde zu Q-0200 (`#issuecomment-7167800109`) schließt der Parser nicht mehr (Bedrohungsmodell oben): `cd -` nach einem `cd`, das scheitern kann; zsh-Wörter mit `-` als Operanden; `--` vor `+N`/`-N`; zwei Operanden aus einem Ordner ohne Projekt. Ref-Änderungen daraus verweigert Schicht 2. Schicht 1 greift, wenn die Session in einer Gate-Worktree mit Sandbox läuft. Owner-Entscheid vom 25.11.2026, wörtlich: „Punkt 4 ist keine Grenze mehr.“ Lesart der Session: gemeint ist der vierte Fall, nach Frage 2 im Kurzbericht nach Q-0200 („Punkt 4“ als Grenze führen).
 
 Lesart der Session (Vorschlag), über den Wortlaut hinaus: `cd +N`/`cd -N` (zsh) ist dieselbe Stapelwahl wie `pushd +N` und zählt mit; `pushd` mit zwei Operanden zählt wie `cd` mit zwei Operanden; „jeden schreibenden git-Befehl“ heißt die acht Befehle dieser Regel, auch mit `git -C <Gate-Worktree>` im selben Bash-Befehl, und die Markierung gilt bis zum Ende des Bash-Befehls, auch nach einer Subshell.
 
