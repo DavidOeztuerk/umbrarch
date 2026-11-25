@@ -19,5 +19,6 @@ scope:
   exclude: []
 estimate: { session_pct: 25, weekly_pct: 5, gold_usd: 0 }
 boss: "Hook-Tests in temporären Repos (Haupt-Checkout-Commit, branch -f/-D develop gepackt, fetch, ohne CLAUDECODE) und Policy-Tests (Sperrliste, Edit über Symlink in den Haupt-Checkout) erst rot, dann grün; dotnet test grün"
+board: { pr: 163 }
 ---
 # Haupt-Checkout auf OS- und git-Ebene schützen (Sandbox, reference-transaction, Hook nur Frühwarnung)

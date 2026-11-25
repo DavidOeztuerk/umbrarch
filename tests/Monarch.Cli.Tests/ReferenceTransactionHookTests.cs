@@ -64,9 +64,11 @@ public sealed class ReferenceTransactionHookTests : IDisposable
         if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(dest, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
     }
 
-    private (int Code, string Out, string Err) Run(string dir, bool claude, params string[] args)
+    private (int Code, string Out, string Err) Run(string dir, bool claude, params string[] args) => RunWithInput(dir, claude, null, args);
+
+    private (int Code, string Out, string Err) RunWithInput(string dir, bool claude, string? stdin, params string[] args)
     {
-        var psi = new ProcessStartInfo("git") { WorkingDirectory = dir, RedirectStandardOutput = true, RedirectStandardError = true };
+        var psi = new ProcessStartInfo("git") { WorkingDirectory = dir, RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = stdin is not null };
         foreach (var k in psi.Environment.Keys.Where(k => k.StartsWith("GIT_", StringComparison.Ordinal) || k == "CLAUDECODE").ToList()) psi.Environment.Remove(k);
         psi.Environment["GIT_CONFIG_NOSYSTEM"] = "1";
         psi.Environment["GIT_CONFIG_GLOBAL"] = _empty;
@@ -75,6 +77,11 @@ public sealed class ReferenceTransactionHookTests : IDisposable
         if (claude) psi.Environment["CLAUDECODE"] = "1";
         foreach (var a in args) psi.ArgumentList.Add(a);
         using var p = Process.Start(psi)!;
+        if (stdin is not null)
+        {
+            p.StandardInput.Write(stdin);
+            p.StandardInput.Close();
+        }
         var err = p.StandardError.ReadToEndAsync();
         var o = p.StandardOutput.ReadToEnd();
         p.WaitForExit();
@@ -203,12 +210,128 @@ public sealed class ReferenceTransactionHookTests : IDisposable
     }
 
     [Fact]
-    public void Documents_worktree_add_with_new_branch_from_the_main_checkout_with_CLAUDECODE()
+    public void Worktree_add_with_new_branch_from_the_main_checkout_is_allowed()
     {
         var path = Path.Combine(_main, ".claude", "worktrees", "G-9");
         var r = Run(_main, true, "worktree", "add", path, "-b", "monarch/G-9-x", "origin/develop");
+        Assert.True(r.Code == 0, $"verweigert: {r.Err}");
+        Assert.Equal(0, Run(_main, false, "rev-parse", "--verify", "-q", "refs/heads/monarch/G-9-x").Code);
+        Assert.True(Directory.Exists(path));
+    }
+
+    private string HeadRef(string dir) => Run(dir, false, "symbolic-ref", "-q", "HEAD").Out;
+
+    [Fact]
+    public void Checkout_of_another_branch_in_the_main_checkout_is_refused_and_HEAD_stays()
+    {
+        Setup(_main, "branch", "other");
+        var r = Run(_main, true, "checkout", "-q", "other");
         Assert.NotEqual(0, r.Code);
         Assert.Contains("ADR-0020", r.Err, StringComparison.Ordinal);
+        Assert.Equal("refs/heads/develop", HeadRef(_main));
+    }
+
+    // Eine vorgetäuschte Lock-Datei einer Worktree darf das HEAD des Haupt-Checkouts nicht freigeben: git sperrt dabei .git/HEAD.lock.
+    [Fact]
+    public void Checkout_in_the_main_checkout_is_refused_even_with_a_planted_worktree_HEAD_lock()
+    {
+        Setup(_main, "branch", "other");
+        File.WriteAllText(Path.Combine(_main, ".git", "worktrees", "G-1", "HEAD.lock"), "");
+        var r = Run(_main, true, "checkout", "-q", "other");
+        Assert.NotEqual(0, r.Code);
+        Assert.Contains("ADR-0020", r.Err, StringComparison.Ordinal);
+        Assert.Equal("refs/heads/develop", HeadRef(_main));
+    }
+
+    [Fact]
+    public void Switch_to_another_branch_in_the_main_checkout_is_refused_and_HEAD_stays()
+    {
+        Setup(_main, "branch", "other");
+        var r = Run(_main, true, "switch", "-q", "other");
+        Assert.NotEqual(0, r.Code);
+        Assert.Contains("ADR-0020", r.Err, StringComparison.Ordinal);
+        Assert.Equal("refs/heads/develop", HeadRef(_main));
+    }
+
+    [Fact]
+    public void Checkout_new_branch_in_the_main_checkout_is_refused_and_HEAD_stays()
+    {
+        var r = Run(_main, true, "checkout", "-q", "-b", "monarch/G-9-w");
+        Assert.NotEqual(0, r.Code);
+        Assert.Contains("ADR-0020", r.Err, StringComparison.Ordinal);
+        Assert.Equal("refs/heads/develop", HeadRef(_main));
+    }
+
+    [Fact]
+    public void Checkout_detach_in_the_main_checkout_is_refused_and_HEAD_stays()
+    {
+        var r = Run(_main, true, "checkout", "-q", "--detach");
+        Assert.NotEqual(0, r.Code);
+        Assert.Contains("ADR-0020", r.Err, StringComparison.Ordinal);
+        Assert.Equal("refs/heads/develop", HeadRef(_main));
+    }
+
+    [Fact]
+    public void Update_ref_of_the_checked_out_non_protected_branch_in_the_main_checkout_is_refused()
+    {
+        Setup(_main, "checkout", "-q", "-b", "feature");
+        var sha = Rev(_main, "refs/heads/develop");
+        var r = Run(_main, true, "update-ref", "refs/heads/feature", sha);
+        Assert.NotEqual(0, r.Code);
+        Assert.Contains("ADR-0020", r.Err, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Update_ref_of_the_checked_out_branch_in_the_main_checkout_in_another_spelling_is_refused()
+    {
+        Setup(_main, "checkout", "-q", "-b", "feature");
+        var sha = Rev(_main, "refs/heads/develop");
+        var r = Run(_main, true, "update-ref", "refs/heads/Feature", sha);
+        Assert.NotEqual(0, r.Code);
+        Assert.Contains("ADR-0020", r.Err, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Documents_update_ref_of_the_main_checkouts_branch_from_a_worktree_is_allowed()
+    {
+        Setup(_main, "checkout", "-q", "-b", "feature");
+        Change(_wt, "w.txt");
+        Setup(_wt, "commit", "-q", "-m", "w");
+        var tip = Rev(_wt, "HEAD");
+        var r = Run(_wt, true, "-C", _wt, "update-ref", "refs/heads/feature", tip);
+        Assert.True(r.Code == 0, $"verweigert: {r.Err}");
+        Assert.Equal(tip, Rev(_main, "refs/heads/feature"));
+    }
+
+    [Fact]
+    public void Branch_create_in_the_main_checkout_is_allowed()
+    {
+        var r = Run(_main, true, "branch", "monarch/G-9-y");
+        Assert.True(r.Code == 0, $"verweigert: {r.Err}");
+        Assert.Equal(0, Run(_main, false, "rev-parse", "--verify", "-q", "refs/heads/monarch/G-9-y").Code);
+    }
+
+    [Fact]
+    public void Update_ref_with_a_new_branch_in_the_main_checkout_is_allowed()
+    {
+        var r = Run(_main, true, "update-ref", "refs/heads/monarch/G-9-z", Rev(_main, "refs/heads/develop"));
+        Assert.True(r.Code == 0, $"verweigert: {r.Err}");
+    }
+
+    [Fact]
+    public void Transaction_with_an_allowed_and_a_protected_ref_is_refused_as_a_whole()
+    {
+        Change(_wt, "w.txt");
+        Setup(_wt, "commit", "-q", "-m", "w");
+        Setup(_main, "checkout", "-q", "--detach");
+        var tip = Rev(_wt, "HEAD");
+        var develop = Rev(_main, "refs/heads/develop");
+        var input = $"start\nupdate refs/heads/monarch/G-9-ok {tip}\nupdate refs/heads/develop {tip}\nprepare\ncommit\n";
+        var r = RunWithInput(_wt, true, input, "update-ref", "--stdin");
+        Assert.NotEqual(0, r.Code);
+        Assert.Contains("ADR-0020", r.Err, StringComparison.Ordinal);
+        Assert.NotEqual(0, Run(_main, false, "rev-parse", "--verify", "-q", "refs/heads/monarch/G-9-ok").Code);
+        Assert.Equal(develop, Rev(_main, "refs/heads/develop"));
     }
 
     [Fact]

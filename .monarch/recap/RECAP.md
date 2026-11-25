@@ -1,14 +1,14 @@
 # RECAP
 
 ## Stand
-- Zeitpunkt: 2026-11-25T19:41:53Z
+- Zeitpunkt: 2026-11-25T20:41:23Z
 - Plan: Pro
-- Mana 5h: 61% (Limit 90%, Reset 2026-11-25T21:00:00Z)
-- Mana 7d: 21% (Limit 96%, Reset 2026-12-02T11:00:00Z)
+- Mana 5h: 83% (Limit 90%, Reset 2026-11-25T21:00:00Z)
+- Mana 7d: 24% (Limit 96%, Reset 2026-12-02T11:00:00Z)
 - Limits: 5h 90%, 7d 96% (plan default)
 
 ## Aktiv
-- Gate G-0130 · Quest Q-0201 [A] · Phase in_progress
+- keine aktive Quest
 
 ## Erledigt
 - Q-0113 [A] cleared: Merge-Policy nach Zielbranch - https://github.com/DavidOeztuerk/umbrarch/pull/15 - Evidence: https://github.com/DavidOeztuerk/monarch/actions/runs/40721744761/job/122946762702, https://github.com/DavidOeztuerk/monarch/actions/runs/40721744761/job/122946762600, https://github.com/DavidOeztuerk/monarch/actions/runs/40721744761/job/122943422084, https://github.com/DavidOeztuerk/monarch/actions/runs/40721744761/job/122943425111, https://github.com/DavidOeztuerk/monarch/actions/runs/40721758194/job/122934234801, https://github.com/DavidOeztuerk/monarch/pull/15
@@ -31,18 +31,9 @@
 - Q-0150: bench/test-gate.sh erweitert, vorher rot, danach grün, deterministisch über BENCH_RESULTS_DIR: knapp unter den C1-Schwellen grün, knapp darüber rot je Klasse; Schwellen nicht über die Umgebung anhebbar; auf einem anderen Betriebssystem Exit 2; alle bestehenden Prüfungen unverändert grün
 - Q-0150: Verweise: der Kommentar zu C1 in .github/workflows/ci.yml nennt die Bedingung ruhige Maschine und den Nachtrag; docs/lessons.md bekommt einen kurzen Nachtrag; die CI-Schritte selbst ändern sich nicht
 - Q-0150: Heikle Quest nach Standardregel 3: Warden-Runde über das Design vor dem Code, kein src-Code, kein anderer Test und keine andere Schwelle aufgeweicht, Schlussrunde des Wardens mit Verdict am Head-SHA
-- Q-0201: Owner-Entscheid vom 25.11.2026 (Chat): Der Haupt-Checkout wird auf OS- und git-Ebene geschützt; der PreToolUse-Hook für Bash ist nur noch Frühwarnung und keine Sicherheitsgrenze
-- Q-0201: Schicht 1: .claude/settings.json mit sandbox.enabled, failIfUnavailable true, allowUnsandboxedCommands false, filesystem.denyWrite für HEAD, index, ORIG_HEAD, FETCH_HEAD, refs/heads/develop, refs/heads/main des Haupt-Checkouts, network.allowedDomains nur so viel wie nötig, excludedCommands nur begründet; verweigert der Hook das Schreiben (protect_paths), legt der Owner die Datei an
-- Q-0201: Prüfung im Bericht: Session im Haupt-Checkout (Bash dort beschreibbar) und Sandbox der Subagenten (Knight, Warden, Kritiker, auch isolation: worktree)
-- Q-0201: Schicht 2: plugin/git-hooks/reference-transaction als reines sh-Skript ohne monarch-Binary; nur im Zustand prepared; CLAUDECODE leer heißt exit 0; sonst Deny bei git-dir == git-common-dir oder Ref refs/heads/develop oder refs/heads/main, Meldung mit Verweis auf ADR-0020 §1; Installation macht der Owner
-- Q-0201: Tests in temporären Repos mit verknüpfter Worktree: Commit im Haupt-Checkout verweigert, Commit in der Worktree erlaubt, branch -f develop und branch -D develop (gepackt) aus der Worktree verweigert, fetch erlaubt, ohne CLAUDECODE alles erlaubt
-- Q-0201: Schicht 3: cwd-Modell eingefroren (keine Änderung an der cd-Logik); neue feste Sperrliste im Bash-Text: hooksPath, GIT_CONFIG, CLAUDECODE ohne Beachtung der Schreibweise, mit Tests
-- Q-0201: Edit, Write, MultiEdit und NotebookEdit: Zielpfad per realpath (Symlinks) gegen den Haupt-Checkout geprüft, mit Tests
-- Q-0201: ADR-0020 §1 neu: Bedrohungsmodell, drei Schichten, Restrisiko wörtlich nach dem Owner-Entscheid
-- Q-0201: dotnet build -warnaserror ohne Warnungen, dotnet test 0 fehlgeschlagen; bestehende Tests nicht aufgeweicht
 
 ## Nächster konkreter Schritt
-Q-0201 (Owner-Entscheid 25.11. Bedrohungsmodell): Knight setzt Schicht 2 (plugin/git-hooks/reference-transaction + Tests) und Schicht 3 (Sperrliste hooksPath/GIT_CONFIG/CLAUDECODE, Edit/Write realpath, SessionStart-Warnung) um; ADR-0020 §1 neu geschrieben (Schichten, Restrisiko). .claude/settings.json: Write per protect_paths verweigert, Owner legt an. Danach: Kritiker, Commit, Push, CI; Owner aktiviert Sandbox+Hook; Beweis Punkt 5; Warden schmale Runde Q-0201; #164-Vermerk; Kurzbericht. Nicht mergen.
+Owner-Entscheid 25.11. (nach Q-0201-Bericht): Owner legt KEINE Repo-settings.json an, Hook noch nicht installiert. Neu als Folge-Quest Q-0202 per gate_plan: (1) Sandbox in ~/.claude/settings.json (User): python3-Befehl mit Sicherung .bak-<datum>, Abbruch wenn sandbox existiert; denyWrite absolut /Users/davidozturk/Projects/umbrarch/.git/{HEAD,index,ORIG_HEAD,FETCH_HEAD,refs/heads/develop,refs/heads/main}; vorher aus Code+Doku ermitteln: allowWrite (~/.nuget, ~/.dotnet, ~/.local/share/NuGet, ~/.monarch – was schreibt monarch?), Domains (GitHub inkl. *.githubusercontent.com, NuGet inkl. CDN), gh-TLS/osxkeychain; KEINE excludedCommands vorsorglich. (2) Hook neu: develop/main immer; im Haupt-Checkout zusätzlich HEAD und Branch von HEAD; sonst erlaubt (worktree add -b aus Main); Tests rot zuerst inkl. update-ref --stdin mit zwei Refs. (3) Belege Gate-Öffnung heute (Datei:Zeile), Vorschlag mit Sandbox (Default: monarch gate open, allowWrite nur .claude/worktrees) – vorlegen. (4) ADR-0020 §1 + README anpassen. (7) Doku-Beleg Schreibbereich. (8) Vorschlag Session im Haupt-Checkout – vorlegen. Dann Kritiker, Commit, Push, CI, Kurzbericht mit ADR-Diff und zwei Befehlen in Reihenfolge. Kein Beweis vor Aktivierung, nicht mergen.
 
 ## Offene Entscheidungen
 - Owner: historische docs (ADR-0001..0018, lessons, evidence) bleiben? Default ja (Vorschlag)
