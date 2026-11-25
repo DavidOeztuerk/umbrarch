@@ -13,5 +13,6 @@ scope:
   exclude: []
 estimate: { session_pct: 4, weekly_pct: 1, gold_usd: 0 }
 boss: "RegelnTextTests.Skill_has_the_gate_checklist_in_the_required_order erst rot, dann grün"
+board: { pr: 163 }
 ---
 # Standardregel 2: Gate-Worktree legt der Owner im Terminal an, Session startet dort

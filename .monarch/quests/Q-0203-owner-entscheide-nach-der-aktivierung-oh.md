@@ -15,5 +15,6 @@ scope:
   exclude: []
 estimate: { session_pct: 8, weekly_pct: 2, gold_usd: 0 }
 boss: "ProtectMainCheckoutTests.The_deny_text_names_the_way_out erst rot, dann grün"
+board: { pr: 163 }
 ---
 # Owner-Entscheide nach der Aktivierung: ohne Socket-Freigabe, Gate öffnen im Terminal, Testergebnisse Sandbox
