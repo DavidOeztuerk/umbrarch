@@ -131,6 +131,7 @@ public static partial class ToolCallPolicy
                         var target = BashAnalysis.CdDestination(seg);
                         if (target is null) break; // unbekannte Option: cd scheitert, cwd und OLDPWD bleiben
                         var next = target == "-" ? prev : Resolve(target, cur);
+                        if (BashAnalysis.HasUncertainDirOption(seg)) next = Union(cur, next);
                         (prev, cur) = (cur, next);
                         break;
                     }
@@ -140,7 +141,7 @@ public static partial class ToolCallPolicy
                         var operands = seg.Tokens.Skip(1).Count(t => !t.StartsWith('-') || t.Length == 1);
                         List<string> next;
                         if (operands == 0) next = Union(cur, stack.Count > 0 ? stack[^1] : cur); // vertauscht die obersten Einträge
-                        else next = Resolve(BashAnalysis.CdTarget(seg), cur);
+                        else next = BashAnalysis.HasUncertainDirOption(seg) ? Union(cur, Resolve(BashAnalysis.CdTarget(seg), cur)) : Resolve(BashAnalysis.CdTarget(seg), cur);
                         stack.Add(cur);
                         (prev, cur) = (cur, next);
                         break;

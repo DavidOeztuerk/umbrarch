@@ -3,7 +3,7 @@ id: Q-0195
 gate: G-0130
 kind: main
 rank: A
-state: proposed
+state: in_review
 dod:
   - "Voraussetzung: Designrunde von Q-0192 abgeschlossen und Q-0194 fertig (ManaPolicy.cs gemeinsam)"
   - "ManaGuard.Decide in der Reihenfolge aus ADR-0020 Abschnitt 3: Proceed; zurückgesetztes Fenster, das nicht passt, unter 10 Minuten ResetPending, danach RecapAndStop mit Hinweis Stand veraltet; Reset des maßgeblichen Fensters in der Zukunft und unter 10 Minuten (0 < resets_at - jetzt < 10 Minuten) PauseWithoutRecap; sonst RecapAndStop"
@@ -15,5 +15,6 @@ scope:
   exclude: []
 estimate: { session_pct: 10, weekly_pct: 3, gold_usd: 0 }
 boss: "Decide-Tests: resets_at vor 5 Minuten und volles Fenster ergibt ResetPending, vor 11 Minuten RecapAndStop; maßgebliches Fenster schon zurückgesetzt und passend, ein anderes passt nicht: RecapAndStop; WakePlan-Test Reset + 1 min; dotnet test grün"
+board: { pr: 163 }
 ---
 # Mana: Fall „Reset erfolgt“ statt RecapAndStop, Weckruf Reset + 1 Minute

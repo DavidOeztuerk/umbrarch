@@ -173,6 +173,12 @@ internal static class GateCommands
             return Refuse(env, "not an awakened project.");
         }
 
+        // ADR-0020 §5: move-quest runs in the gate worktree; the main checkout is never touched (a linked worktree has a .git file, not a directory).
+        if (Directory.Exists(Path.Combine(paths.Root, ".git")))
+        {
+            return Refuse(env, "gate move-quest runs in the gate worktree, not in the main checkout.");
+        }
+
         var board = new LocalFileBoard(paths.Root);
         var quest = board.ListQuestsAsync().GetAwaiter().GetResult().FirstOrDefault(q => q.Id.Value == questId);
         if (quest is null)
@@ -221,6 +227,13 @@ internal static class GateCommands
         if (quest.Gate != target.Id)
         {
             board.UpsertQuestAsync(quest with { Gate = target.Id }).GetAwaiter().GetResult();
+        }
+
+        if (from == toGate)
+        {
+            // Only the target list was repaired; the quest did not change gates.
+            env.Out.WriteLine($"repaired: {questId} is now listed in {toGate}.");
+            return 0;
         }
 
         var ledger = new ProjectLedger(paths, env.Clock);

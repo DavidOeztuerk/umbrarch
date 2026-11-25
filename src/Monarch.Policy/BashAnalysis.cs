@@ -324,6 +324,22 @@ internal static class BashAnalysis
     private static bool IsCdOption(string token) =>
         token.Length > 1 && token[0] == '-' && token[1..].All(ch => ch is 'L' or 'P' or 'e' or '@');
 
+    /// <summary>
+    /// True, wenn <c>cd</c> oder <c>pushd</c> eine Option trägt, die bash und zsh verschieden lesen (alles außer <c>-L</c>/<c>-P</c>, etwa <c>pushd -n</c>
+    /// oder <c>cd -e</c>); das cwd-Modell hält dann das alte und das neue Verzeichnis.
+    /// </summary>
+    public static bool HasUncertainDirOption(Segment seg)
+    {
+        foreach (var t in seg.Tokens.Skip(1))
+        {
+            if (t == "--") return false;
+            if (t.Length < 2 || t[0] != '-') return false;
+            if (!t[1..].All(ch => ch is 'L' or 'P')) return true;
+        }
+
+        return false;
+    }
+
     /// <summary>Git-Unterkommando (nach Globaloptionen wie <c>-C dir</c>) und sein Index, sonst <c>null</c>.</summary>
     public static string? GitSubcommand(string[] tokens, out int index)
     {

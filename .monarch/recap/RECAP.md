@@ -1,10 +1,10 @@
 # RECAP
 
 ## Stand
-- Zeitpunkt: 2026-11-22T18:30:26Z
+- Zeitpunkt: 2026-11-23T05:45:33Z
 - Plan: Pro
-- Mana 5h: 18% (Limit 90%, Reset 2026-11-22T23:10:00Z)
-- Mana 7d: 82% (Limit 96%, Reset 2026-11-25T11:00:00Z)
+- Mana 5h: 16% (Limit 90%, Reset 2026-11-23T09:50:00Z)
+- Mana 7d: 93% (Limit 96%, Reset 2026-11-25T11:00:00Z)
 - Limits: 5h 90%, 7d 96% (plan default)
 
 ## Aktiv
@@ -33,7 +33,7 @@
 - Q-0150: Heikle Quest nach Standardregel 3: Warden-Runde über das Design vor dem Code, kein src-Code, kein anderer Test und keine andere Schwelle aufgeweicht, Schlussrunde des Wardens mit Verdict am Head-SHA
 
 ## Nächster konkreter Schritt
-G-0130 PR 163, Head 971f4c7. Q-0193: schmale Warden-Pruefung changes (issuecomment-7083652257): Fix 971f4c7 oeffnet 2 vorher verweigerte Formen (env -C -d vor sh -c: WithEnvDirs muss Ziel woertlich setzen, ./ vor -; ProjectTargets.Locations ignoriert Subshell-Grenzen). Standardregel 3: Frage an Owner gestellt (Optionen: fixen + Schlussrunde prueft / fixen + eigene Pruefung / Fix-Teil zuruecknehmen). Auf Antwort warten, dann Q-0194. Woche 79 % von 96 %: Rest des Gates passt voraussichtlich nicht vor 25.11. 11:00 UTC.
+G-0130 PR 163, Head 36bf906 (Q-0193 Fix 3 und Q-0194..Q-0198 vom externen Agenten, vom Owner committet). Schritt 1 erledigt: pull ff (already up to date), status nur eigene Ledger-Zeilen, ledger verify ok. Schritt 2 gestoppt: quest accept Q-0194 refused (7d 93% + 5% > 96%, Reset 2026-11-25T11:00Z). Weiter nach Owner-Auftrag 23.11.: Buchfuehrung Q-0194..Q-0198 (accept, start, submit, quest pr <Q> 163), Monarch-Stand committen (Kritiker, kein skip ci), gh pr checks 163, Warden-Schlussrunde origin/develop...HEAD (zaehlt als Code-Runde fuer Q-0193 Fix 3, Q-0194, Q-0195, Q-0197; Abweichungen laut Auftrag), gate verdict, Issue Nacharbeit G-0130, Kurzbericht, nicht mergen.
 
 ## Offene Entscheidungen
 - Owner: historische docs (ADR-0001..0018, lessons, evidence) bleiben? Default ja (Vorschlag)

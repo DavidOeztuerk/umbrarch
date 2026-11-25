@@ -351,4 +351,16 @@ public sealed class ProtectMainCheckoutTests : IDisposable
         Assert.Contains("git worktree add .claude/worktrees/<G> -b monarch/<G>-<slug> origin/develop", d.Reason);
         Assert.Contains("EnterWorktree", d.Reason);
     }
+
+    [Theory]
+    [InlineData("pushd -n /tmp; git commit -m x")]
+    [InlineData("pushd -n /tmp && git commit -m x")]
+    [InlineData("pushd -q /tmp; git commit -m x")]
+    [InlineData("cd -e /tmp; git commit -m x")]
+    [InlineData("cd -@ /tmp; git commit -m x")]
+    [InlineData("cd -Pe /tmp; git commit -m x")]
+    public void Dir_options_read_differently_by_bash_and_zsh_keep_the_main_checkout(string cmd) => Deny(cmd, _main);
+
+    [Fact]
+    public void Pushd_without_options_into_a_worktree_is_allowed() => Allow($"pushd {_wt}; git commit -m x", _main);
 }

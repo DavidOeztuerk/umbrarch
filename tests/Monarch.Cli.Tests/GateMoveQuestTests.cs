@@ -159,6 +159,66 @@ public class GateMoveQuestTests
         Assert.Equal(0, p.Run(["ledger", "verify"]).Code);
     }
 
+    [Fact]
+    public async Task Gate_plan_with_two_quests_from_one_gate_removes_both()
+    {
+        using var p = new TempProject();
+        Seed.Gate(p, "G-0001", "[Q-0001, Q-0002, Q-0003]");
+        Seed.Quest(p, "Q-0001", state: "proposed", gate: "G-0001");
+        Seed.Quest(p, "Q-0002", state: "proposed", gate: "G-0001");
+        Seed.Quest(p, "Q-0003", state: "proposed", gate: "G-0001");
+
+        var (err, text) = Result(Rpc(p, Call(1, "gate_plan", PlanTwo("Q-0001", "Q-0002")))[0]);
+
+        Assert.False(err, text);
+        var board = await ReadBoard(p);
+        Assert.Equal(["Q-0003"], QuestsOf(board, "G-0001"));
+        var target = QuestsOf(board, "G-0002");
+        Assert.Contains("Q-0001", target, StringComparer.Ordinal);
+        Assert.Contains("Q-0002", target, StringComparer.Ordinal);
+        var moved = p.Events().Where(e => e.Type == "QuestMoved").ToList();
+        Assert.Equal(2, moved.Count);
+        Assert.All(moved, m => Assert.Equal("G-0001", m.Payload.GetProperty("from").GetString()));
+        Assert.Equal(0, p.Run(["ledger", "verify"]).Code);
+    }
+
+    [Fact]
+    public async Task Repairing_only_the_target_list_logs_no_QuestMoved()
+    {
+        using var p = new TempProject();
+        Seed.Gate(p, "G-0002", "[Q-0003]");
+        Seed.Quest(p, "Q-0001", gate: "G-0002");
+        Seed.Quest(p, "Q-0003", gate: "G-0002");
+
+        var run = p.Run(["gate", "move-quest", "Q-0001", "--to", "G-0002"]);
+
+        Assert.Equal(0, run.Code);
+        var board = await ReadBoard(p);
+        Assert.Contains("Q-0001", QuestsOf(board, "G-0002"), StringComparer.Ordinal);
+        Assert.DoesNotContain(p.Events(), e => e.Type == "QuestMoved");
+    }
+
+    [Fact]
+    public void Refuses_in_the_main_checkout()
+    {
+        using var p = new TempProject();
+        Seed.Gate(p, "G-0001", "[Q-0001]");
+        Seed.Gate(p, "G-0002", "[]");
+        Seed.Quest(p, "Q-0001", gate: "G-0001");
+        Directory.CreateDirectory(Path.Combine(p.Root, ".git"));
+        var before = Snapshot(p);
+
+        var run = p.Run(["gate", "move-quest", "Q-0001", "--to", "G-0002"]);
+
+        Assert.Equal(1, run.Code);
+        Assert.Contains("worktree", run.Out + run.Err, StringComparison.Ordinal);
+        Assert.Equal(before, Snapshot(p));
+        Assert.DoesNotContain(p.Events(), e => e.Type == "QuestMoved");
+    }
+
+    private static string PlanTwo(string a, string b) =>
+        $$"""{"gate":{"id":"G-0002","title":"Gate two","rank":"C","kind":"standard"},"quests":[{"id":"{{a}}","title":"Plain","kind":"main","rank":"D","scope":{"include":["src/web/**"],"exclude":[]},"estimate":{"session_pct":5,"weekly_pct":1},"dod":["a","b"]},{"id":"{{b}}","title":"Plain","kind":"main","rank":"D","scope":{"include":["src/web/**"],"exclude":[]},"estimate":{"session_pct":5,"weekly_pct":1},"dod":["a","b"]}]}""";
+
     private static List<JsonNode> Rpc(TempProject p, params string[] lines)
     {
         var o = new StringWriter();

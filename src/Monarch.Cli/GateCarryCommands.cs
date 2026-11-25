@@ -35,6 +35,12 @@ internal static partial class GateCarryCommands
             return Refuse(env, "not an awakened project.");
         }
 
+        // ADR-0020 §4: carry runs in the new gate worktree; the main checkout is never touched (a linked worktree has a .git file, not a directory).
+        if (Directory.Exists(Path.Combine(paths.Root, ".git")))
+        {
+            return Refuse(env, "gate carry runs in the gate worktree, not in the main checkout.");
+        }
+
         var refs = RunGit(paths.Root, "for-each-ref", "--format=%(refname)", "refs/remotes/origin/monarch/");
         if (refs.Code != 0)
         {

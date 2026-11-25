@@ -26,7 +26,7 @@ public class GateCarryTests
             Gate2 = Seed.Gate(P, "G-0002", "[Q-0003]");
             Q3 = Seed.Quest(P, "Q-0003", state: "in_review", gate: "G-0002");
             Q4 = Seed.Quest(P, "Q-0004", state: "in_review", gate: "G-0001");
-            File.WriteAllText(Path.Combine(P.Root, ".gitignore"), ".monarch/local/\n");
+            File.WriteAllText(Path.Combine(P.Root, ".gitignore"), ".monarch/local/\n.claude/\n");
             Git(P.Root, "init", "-q", "-b", "develop");
             Git(P.Root, "add", "-A");
             Git(P.Root, "commit", "-q", "-m", "init");
@@ -34,6 +34,7 @@ public class GateCarryTests
             Git(P.Root, "push", "-q", "origin", "develop");
             if (!branches)
             {
+                AddWorktree();
                 return;
             }
 
@@ -72,33 +73,38 @@ public class GateCarryTests
             {
                 Git(P.Root, "fetch", "-q", "origin");
             }
+
+            AddWorktree();
         }
 
         public TempProject P { get; }
 
-        public string Gate1 { get; }
+        /// <summary>The linked worktree off develop in which <c>gate carry</c> runs; all file checks read here.</summary>
+        public string Wt { get; private set; } = "";
 
-        public string Gate2 { get; }
+        public string Gate1 { get; private set; }
 
-        public string Q1 { get; }
+        public string Gate2 { get; private set; }
 
-        public string Q2 { get; }
+        public string Q1 { get; private set; }
 
-        public string Q3 { get; }
+        public string Q2 { get; private set; }
 
-        public string Q4 { get; }
+        public string Q3 { get; private set; }
+
+        public string Q4 { get; private set; }
 
         public string Text(string path) => File.ReadAllText(path);
 
         public string StateOf(string path) => StateLine.Match(Text(path)).Groups[1].Value;
 
-        public string Head() => Out(P.Root, "rev-parse", "HEAD");
+        public string Head() => Out(Wt, "rev-parse", "HEAD");
 
-        public string Status() => Out(P.Root, "status", "--short");
+        public string Status() => Out(Wt, "status", "--short");
 
         public Dictionary<string, string> BoardFiles()
         {
-            var root = Path.Combine(P.Root, ".monarch");
+            var root = Path.Combine(Wt, ".monarch");
             return Directory.GetFiles(Path.Combine(root, "gates")).Concat(Directory.GetFiles(Path.Combine(root, "quests")))
                 .ToDictionary(f => f, File.ReadAllText, StringComparer.Ordinal);
         }
@@ -117,6 +123,20 @@ public class GateCarryTests
             {
             }
         }
+
+        private void AddWorktree()
+        {
+            Git(P.Root, "worktree", "add", "-q", ".claude/worktrees/W", "-b", "work", "develop");
+            Wt = Path.Combine(P.Root, ".claude", "worktrees", "W");
+            Gate1 = InWt(Gate1);
+            Gate2 = InWt(Gate2);
+            Q1 = InWt(Q1);
+            Q2 = InWt(Q2);
+            Q3 = InWt(Q3);
+            Q4 = InWt(Q4);
+        }
+
+        private string InWt(string path) => Path.Combine(Wt, Path.GetRelativePath(P.Root, path));
 
         private static void Replace(string path, string oldText, string newText) =>
             File.WriteAllText(path, File.ReadAllText(path).Replace(oldText, newText, StringComparison.Ordinal));
@@ -152,8 +172,30 @@ public class GateCarryTests
 
     private static string ExceptState(string text) => StateLine.Replace(text, "state: *");
 
-    private static List<(string Type, System.Text.Json.JsonElement Payload)> Carried(TempProject p) =>
-        p.Events().Where(e => e.Type == "GateStatusCarried").ToList();
+    /// <summary>Reads the ledger of the worktree, where carry appends its event.</summary>
+    private static List<(string Type, System.Text.Json.JsonElement Payload)> Carried(Rig rig)
+    {
+        var list = new List<(string, System.Text.Json.JsonElement)>();
+        var dir = Path.Combine(rig.Wt, ".monarch", "ledger");
+        if (!Directory.Exists(dir))
+        {
+            return list;
+        }
+
+        foreach (var f in Directory.EnumerateFiles(dir, "*.jsonl", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
+        {
+            foreach (var line in File.ReadAllLines(f))
+            {
+                var doc = System.Text.Json.JsonDocument.Parse(line).RootElement;
+                if (doc.GetProperty("type").GetString() == "GateStatusCarried")
+                {
+                    list.Add(("GateStatusCarried", doc.GetProperty("payload").Clone()));
+                }
+            }
+        }
+
+        return list;
+    }
 
     /// <summary>Only the merged gate's state and a valid listed quest state move; rank, bogus, outsiders and ledger files stay behind.</summary>
     [Fact]
@@ -163,7 +205,7 @@ public class GateCarryTests
         var before = rig.Text(rig.Q1);
         var gate2 = rig.Text(rig.Gate2);
         var head = rig.Head();
-        var r = rig.P.Run(["gate", "carry"]);
+        var r = rig.P.Run(["gate", "carry"], cwd: rig.Wt);
         Assert.Equal(0, r.Code);
         Assert.Equal("merged", rig.StateOf(rig.Gate1));
         Assert.Equal("cleared", rig.StateOf(rig.Q1));
@@ -173,9 +215,9 @@ public class GateCarryTests
         Assert.Equal("in_review", rig.StateOf(rig.Q4));
         Assert.Equal(gate2, rig.Text(rig.Gate2));
         Assert.Equal("proposed", rig.StateOf(rig.Gate2));
-        Assert.Empty(Directory.GetFiles(Path.Combine(rig.P.Root, ".monarch", "gates"), "G-0009*"));
-        Assert.False(File.Exists(Path.Combine(rig.P.Root, ".monarch", "ledger", "2026-11", "foreign.abcdef12.jsonl")));
-        var carried = Assert.Single(Carried(rig.P));
+        Assert.Empty(Directory.GetFiles(Path.Combine(rig.Wt, ".monarch", "gates"), "G-0009*"));
+        Assert.False(File.Exists(Path.Combine(rig.Wt, ".monarch", "ledger", "2026-11", "foreign.abcdef12.jsonl")));
+        var carried = Assert.Single(Carried(rig));
         Assert.Equal("G-0001", carried.Payload.GetProperty("gate").GetString());
         Assert.Equal("Q-0001", carried.Payload.GetProperty("quests").GetString());
         Assert.Equal("refs/remotes/origin/monarch/G-0001-x", carried.Payload.GetProperty("from_ref").GetString());
@@ -190,12 +232,12 @@ public class GateCarryTests
     public void Second_call_changes_nothing()
     {
         using var rig = new Rig();
-        Assert.Equal(0, rig.P.Run(["gate", "carry"]).Code);
+        Assert.Equal(0, rig.P.Run(["gate", "carry"], cwd: rig.Wt).Code);
         var files = rig.BoardFiles();
-        var again = rig.P.Run(["gate", "carry"]);
+        var again = rig.P.Run(["gate", "carry"], cwd: rig.Wt);
         Assert.Equal(0, again.Code);
         Assert.Contains("nothing to carry", again.Out + again.Err, StringComparison.Ordinal);
-        Assert.Single(Carried(rig.P));
+        Assert.Single(Carried(rig));
         foreach (var (path, text) in files)
         {
             Assert.Equal(text, File.ReadAllText(path));
@@ -209,10 +251,10 @@ public class GateCarryTests
         using var rig = new Rig();
         File.WriteAllText(rig.Q1, rig.Text(rig.Q1).Replace("state: in_review", "state: cleared", StringComparison.Ordinal));
         Assert.Equal("proposed", rig.StateOf(rig.Gate1));
-        var r = rig.P.Run(["gate", "carry"]);
+        var r = rig.P.Run(["gate", "carry"], cwd: rig.Wt);
         Assert.Equal(0, r.Code);
         Assert.Equal("merged", rig.StateOf(rig.Gate1));
-        var carried = Assert.Single(Carried(rig.P));
+        var carried = Assert.Single(Carried(rig));
         Assert.Equal("", carried.Payload.GetProperty("quests").GetString());
     }
 
@@ -223,10 +265,10 @@ public class GateCarryTests
         using var rig = new Rig();
         var files = rig.BoardFiles();
         var head = rig.Head();
-        var r = rig.P.Run(["gate", "carry"], vars: new Dictionary<string, string?> { ["MONARCH_AGENT_TYPE"] = "knight" });
+        var r = rig.P.Run(["gate", "carry"], cwd: rig.Wt, vars: new Dictionary<string, string?> { ["MONARCH_AGENT_TYPE"] = "knight" });
         Assert.Equal(1, r.Code);
         Assert.Contains("main session", r.Out + r.Err, StringComparison.Ordinal);
-        Assert.Empty(Carried(rig.P));
+        Assert.Empty(Carried(rig));
         Assert.Equal(head, rig.Head());
         Assert.Equal("", rig.Status());
         foreach (var (path, text) in files)
@@ -235,14 +277,32 @@ public class GateCarryTests
         }
     }
 
+    /// <summary>ADR-0020 §4: the main checkout is never touched.</summary>
+    [Fact]
+    public void Refuses_in_the_main_checkout()
+    {
+        using var rig = new Rig();
+        var files = rig.BoardFiles();
+        var r = rig.P.Run(["gate", "carry"], cwd: rig.P.Root);
+        Assert.Equal(1, r.Code);
+        Assert.Contains("main checkout", r.Out + r.Err, StringComparison.Ordinal);
+        Assert.Empty(Carried(rig));
+        foreach (var (path, text) in files)
+        {
+            Assert.Equal(text, File.ReadAllText(path));
+        }
+
+        Assert.Equal("", Out(rig.P.Root, "status", "--short"));
+    }
+
     /// <summary>No gate branch on origin means there is nothing to copy.</summary>
     [Fact]
     public void Without_gate_branches_there_is_nothing_to_carry()
     {
         using var rig = new Rig(branches: false);
-        var r = rig.P.Run(["gate", "carry"]);
+        var r = rig.P.Run(["gate", "carry"], cwd: rig.Wt);
         Assert.Equal(0, r.Code);
         Assert.Contains("nothing to carry", r.Out + r.Err, StringComparison.Ordinal);
-        Assert.Empty(Carried(rig.P));
+        Assert.Empty(Carried(rig));
     }
 }

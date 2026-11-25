@@ -180,7 +180,7 @@ internal static class MonarchApp
 
         var wake = new Command("wake", "Out-of-session wake call (opt-in via mana.wake): schedule, fire, cancel.");
         var wakeSession = new Option<string>("--session") { Description = "Session UUID.", Required = true };
-        var wakeAt = new Option<string>("--at") { Description = "Wake time, ISO-8601 (resets_at + 3 min, from 'monarch rest').", Required = true };
+        var wakeAt = new Option<string>("--at") { Description = "Wake time, ISO-8601 (resets_at + 1 min, from 'monarch rest').", Required = true };
         var wakeSchedule = new Command("schedule", "Install the one-shot job (launchd or systemd; owner opt-in).");
         wakeSchedule.Options.Add(wakeSession);
         wakeSchedule.Options.Add(wakeAt);

@@ -107,6 +107,16 @@ internal static class GateCleanupCommands
             return Refuse(env, $"git add .monarch failed in {wt}: {add.Err}");
         }
 
+        // Only the Monarch state may go into the cleanup commit; anything staged before is the user's and stays out.
+        var foreign = RunGit(wt, "diff", "--cached", "--name-only").Out
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(f => !f.StartsWith(".monarch/", StringComparison.Ordinal))
+            .ToList();
+        if (foreign.Count > 0)
+        {
+            return Refuse(env, $"files outside .monarch are staged in {wt}; nothing was committed, pushed or removed: {string.Join(", ", foreign)}");
+        }
+
         if (RunGit(wt, "diff", "--cached", "--quiet").Code != 0)
         {
             var commit = RunGit(wt, "commit", "-m", $"{gateId}: Monarch-Stand nach Merge [skip ci]");

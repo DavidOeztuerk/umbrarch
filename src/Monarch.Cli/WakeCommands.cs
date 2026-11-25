@@ -12,7 +12,7 @@ namespace Monarch.Cli;
 /// <param name="Env">Calling environment (PATH, HOME, clock).</param>
 /// <param name="Paths">The project.</param>
 /// <param name="Session">Session UUID.</param>
-/// <param name="At">Wake time (resets_at + 3 min).</param>
+/// <param name="At">Wake time (resets_at + 1 min).</param>
 /// <param name="MonarchBin">Absolute path of the monarch binary.</param>
 /// <param name="ClaudeBin">Absolute path of the claude binary.</param>
 internal sealed record WakeJob(CliEnv Env, ProjectPaths Paths, string Session, DateTimeOffset At, string MonarchBin, string ClaudeBin)

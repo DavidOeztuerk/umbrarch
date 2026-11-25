@@ -3,7 +3,7 @@ id: Q-0194
 gate: G-0130
 kind: main
 rank: A
-state: proposed
+state: in_review
 dod:
   - "Voraussetzung: Designrunde von Q-0192 abgeschlossen und Q-0193 fertig (gemeinsame Pfade in src/Monarch.Policy)"
   - "tools/shadow-costs.py liest alle Ledger und gibt je Shadow und Modell n, Median, p90 und Max aus (Filter laut ADR-0020); Test mit Fixture-Ledger"
@@ -17,5 +17,6 @@ scope:
   exclude: []
 estimate: { session_pct: 20, weekly_pct: 5, gold_usd: 0 }
 boss: "Hook-Tests: Shadow-Start mit Kosten über der Resthöhe deny, darunter allow; Werkzeug im Shadow über der Grenze deny, im Main allow; dotnet test grün"
+board: { pr: 163 }
 ---
 # Mana-Bremse für Shadows: Prüfung vor dem Start, Stopp im laufenden Shadow (#161, #74)

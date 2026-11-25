@@ -232,6 +232,21 @@ public class GateCleanupTests
         Assert.Equal(Skip, rig.RemoteSubject());
     }
 
+    /// <summary>Files staged outside .monarch belong to the user and must not land in the cleanup commit.</summary>
+    [Fact]
+    public void Staged_files_outside_monarch_stop_the_cleanup()
+    {
+        using var rig = new Rig();
+        MergedAndGreen(rig);
+        File.WriteAllText(Path.Combine(rig.Wt, "leak.txt"), "x");
+        Git(rig.Wt, "add", "leak.txt");
+        var r = rig.P.Run(["gate", "cleanup", "G-0001"]);
+        Assert.Equal(1, r.Code);
+        Assert.Contains("leak.txt", r.Out + r.Err, StringComparison.Ordinal);
+        Assert.Null(rig.RemoteTip());
+        Assert.True(Directory.Exists(rig.Wt));
+    }
+
     /// <summary>After the blocking file is gone, a second call removes the worktree and does not commit again.</summary>
     [Fact]
     public void Second_call_after_the_fix_removes_the_worktree_without_a_new_commit()

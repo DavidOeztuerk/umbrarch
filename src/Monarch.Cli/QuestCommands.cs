@@ -78,7 +78,7 @@ internal static class QuestCommands
                     // ADR-0020 §3: after a reset the stand is renewed; the session checks again instead of stopping.
                     if (ManaGuard.PendingMessage(decision, snapshot, scaled.SessionPct, scaled.WeeklyPct, limits, env.Clock.UtcNow) is { } pending)
                     {
-                        return Refuse(env, FormattableString.Invariant($"Mana does not fit ({decision}): {pending} {pairLine}"));
+                        return Refuse(env, $"{pending} {pairLine}");
                     }
 
                     // #87: nach dem Reset ist ein alter Stand veraltet. Die Ablehnung bleibt; die Meldung nennt den Grund und den Weg.

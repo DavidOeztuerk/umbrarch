@@ -333,25 +333,24 @@ internal static partial class GatePlan
         var gateFile = Directory.EnumerateFiles(Path.Combine(paths.MonarchDir, "gates"), gateId + "-*.md").First();
         BoardFiles.Edit(gateFile, r => r.With("type", new YamlScalar(gateKind)));
 
-        // ADR-0020 §5: a planned quest that sits in another gate leaves that gate's list; QuestMoved follows the quest file below.
+        // ADR-0020 §5: planned quests leave every other gate list in one write per gate; QuestMoved follows the quest file below.
         var movedFrom = new Dictionary<string, string>(StringComparer.Ordinal);
-        var allGates = board.ListGatesAsync().GetAwaiter().GetResult();
-        foreach (var p in planned)
+        var plannedIds = planned.Select(p => p.Quest.Id).ToHashSet();
+        foreach (var other in board.ListGatesAsync().GetAwaiter().GetResult().Where(x => x.Id.Value != gateId && x.Quests.Any(plannedIds.Contains)))
         {
-            var others = allGates.Where(gate => gate.Id.Value != gateId && gate.Quests.Contains(p.Quest.Id)).ToList();
-            foreach (var other in others)
+            foreach (var q in other.Quests.Where(plannedIds.Contains))
             {
-                board.UpsertGateAsync(other with { Quests = [.. other.Quests.Where(q => q != p.Quest.Id)] }).GetAwaiter().GetResult();
+                movedFrom.TryAdd(q.Value, other.Id.Value);
             }
 
-            var old = existing.FirstOrDefault(x => x.Id == p.Quest.Id);
-            if (old is not null && old.Gate.Value != gateId)
+            board.UpsertGateAsync(other with { Quests = [.. other.Quests.Where(q => !plannedIds.Contains(q))] }).GetAwaiter().GetResult();
+        }
+
+        foreach (var p in planned)
+        {
+            if (existing.FirstOrDefault(x => x.Id == p.Quest.Id) is { } old && old.Gate.Value != gateId)
             {
                 movedFrom[p.Quest.Id.Value] = old.Gate.Value;
-            }
-            else if (others.Count > 0)
-            {
-                movedFrom[p.Quest.Id.Value] = others[0].Id.Value;
             }
         }
 

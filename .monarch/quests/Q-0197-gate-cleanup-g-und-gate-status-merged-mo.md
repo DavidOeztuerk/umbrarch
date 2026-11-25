@@ -3,7 +3,7 @@ id: Q-0197
 gate: G-0130
 kind: main
 rank: A
-state: proposed
+state: in_review
 dod:
   - "Voraussetzung: Designrunde von Q-0192 abgeschlossen, Q-0193 und Q-0196 fertig"
   - "gate merge setzt den Gate-Status in der Gate-Datei auf merged; merged zählt zu den geschlossenen Gate-Zuständen (GateMergeCommands.cs:20), ein zweites gate merge und ein spätes gate verdict weisen das Gate ab, gate check bleibt möglich (Test)"
@@ -17,5 +17,6 @@ scope:
   exclude: []
 estimate: { session_pct: 16, weekly_pct: 4, gold_usd: 0 }
 boss: "Integrationstest mit Temp-Repo und Bare-Remote: cleanup vor GateMerged deny; danach Commit mit Skip-Marker auf dem Gate-Branch im Remote, Worktree entfernt, Gate-Datei merged; carry übernimmt nur state; Subagent-Aufruf deny"
+board: { pr: 163 }
 ---
 # gate cleanup <G> und Gate-Status merged; Monarch-Stand gemergter Gates weitertragen (#44, #36, #46, #139)
