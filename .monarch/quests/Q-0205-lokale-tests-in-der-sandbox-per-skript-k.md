@@ -16,5 +16,6 @@ scope:
   exclude: []
 estimate: { session_pct: 8, weekly_pct: 2, gold_usd: 0 }
 boss: "RegelnTextTests erst rot, dann grün; scripts/test-local.sh liefert Exit ungleich 0 bei dem bekannten /bin/ps-Fehler"
+board: { pr: 163 }
 ---
 # Lokale Tests in der Sandbox per Skript, Knights ohne isolation worktree, Aufräumen im Owner-Terminal

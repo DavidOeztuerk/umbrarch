@@ -11,5 +11,6 @@ scope:
   include: ["plugin/skills/gate/SKILL.md"]
   exclude: []
 estimate: { session_pct: 1, weekly_pct: 0.2, gold_usd: 0 }
+board: { pr: 163 }
 ---
 # gate-Skill: gate cleanup vorerst im Terminal des Owners
