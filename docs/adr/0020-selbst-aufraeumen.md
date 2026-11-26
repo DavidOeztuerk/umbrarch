@@ -2,7 +2,7 @@
 
 - Status: Eine frühere Fassung hat der Warden für develop freigegeben (schmale Prüfung des Fixes, approve, PR #163, Kommentar `#issuecomment-7079968810`). Die jetzige Fassung mit dem Bedrohungsmodell vom 25.11.2026 (§1) ist weder vom Warden noch vom Owner freigegeben. Owner-Fragen siehe „Offen“.
 - Datum: 2026-11-22, §1 neu am 2026-11-25
-- Gate: G-0130, Quests Q-0192 bis Q-0210
+- Gate: G-0130, Quests Q-0192 bis Q-0212
 - Bezug: #46, #161, #74, #139, #16, #81, #44, #36, ADR-0003, ADR-0004, ADR-0007, ADR-0008, ADR-0010, ADR-0011, ADR-0012, ADR-0015, ADR-0018, ADR-0019
 - Fassung: Designrunde 1 (`#issuecomment-7078646801`), Delta-Runde (`#issuecomment-7079794677`), Fix und schmale Prüfung (`#issuecomment-7079968810`); §1 danach nach der Schlussrunde (`#issuecomment-7161665432`) und der Delta-Runde zu Q-0200 (`#issuecomment-7167800109`)
 
@@ -367,7 +367,25 @@ print("Alle anderen Schlüssel unverändert (Werte geprüft, Einrückung neu).")
 PY
 ```
 
-**Proben nach der Aktivierung** (Definition des Owners vom 26.11.2026, wörtlich: „f) <main>/.git/commondir anlegen muss scheitern, g) ": >> <main>/.git/packed-refs" muss scheitern, h) Edit-Werkzeug auf <main>/README.md muss verweigert werden, beide Male develop vorher/nachher.“): Ergebnisse folgen nach der Aktivierung.
+**Proben nach der Aktivierung** (Definition des Owners vom 26.11.2026, wörtlich: „f) <main>/.git/commondir anlegen muss scheitern, g) ": >> <main>/.git/packed-refs" muss scheitern, h) Edit-Werkzeug auf <main>/README.md muss verweigert werden, beide Male develop vorher/nachher.“). Der Owner hat den Befehl am 26.11.2026 ausgeführt und das Binary mit `scripts/install-local.sh` aus der Gate-Worktree neu installiert (laut Owner). Danach `~/.claude/settings.json` mit `grep -n 'commondir\|packed-refs'`: Zeilen 175 und 176; `grep -c 'Edit(//'`: 24. Dazu die Gegenprobe des Owners, wörtlich: „i) Gegenprobe: Edit und Write auf eine Datei in dieser Worktree (z. B. eine neue Datei im Scratchpad-Unterordner der Worktree oder ein harmloser Kommentar, danach zurück) müssen gehen. Ebenso ein Knight-Probelauf mit Write im eigenen Arbeitsverzeichnis.“
+
+Ergebnisse (Session in der Gate-Worktree G-0130, nach der Aktivierung mit neuem SessionStart-Briefing; Fehlertexte wörtlich):
+
+| Probe | Befehl | Ergebnis | Zustand |
+|---|---|---|---|
+| f | `echo . > <main>/.git/commondir` | „operation not permitted: /Users/davidozturk/Projects/umbrarch/.git/commondir“, Exit 1 | keine Datei `commondir` |
+| g | `: >> <main>/.git/packed-refs` | „operation not permitted: /Users/davidozturk/Projects/umbrarch/.git/packed-refs“, Exit 1 | 5720 Bytes, mtime 1795315409 (22. Nov. 03:43:29), vorher und nachher gleich |
+| h | Edit-Werkzeug auf `<main>/README.md` (nach Read; Suchtext, den es nicht gibt, damit auch ohne Sperre nichts geändert wird) | „File is in a directory that is denied by your permission settings.“ | 847 Bytes, mtime 1795139668, vorher und nachher gleich |
+| i | Write, dann Edit auf `tmp-probe-i/main.txt` in der Gate-Worktree (Probe-Quest Q-0211) | „File created successfully …“, „… has been updated successfully.“ | Datei danach entfernt |
+| i | Edit-Werkzeug auf `README.md` und `src/Monarch.Policy/ToolCallTypes.cs` der Gate-Worktree (Suchtext, den es nicht gibt) | je „String to replace not found in file.“ | unverändert |
+| i | Knight ohne `isolation`: `pwd`, Write und Edit auf `tmp-probe-i/knight.txt`, `cat` | `pwd` = Gate-Worktree; „File created successfully …“, „… has been updated successfully.“, `cat`: „Probe i (Knight): Write und Edit im eigenen Arbeitsverzeichnis.“; keine Hook- oder Permission-Meldung | Datei und Ordner `tmp-probe-i` danach entfernt |
+
+Vorher und nachher: `git rev-parse refs/heads/develop` gibt `dfa56649c346e34229e3d093c524a1c43c089ffa`; `grep -n 'refs/heads/develop$' <main>/.git/packed-refs` gibt `2:dfa56649c346e34229e3d093c524a1c43c089ffa refs/heads/develop`.
+
+Lesart der Session:
+- Bei h hat die Permission-Regel von Claude Code gegriffen, nicht `protect_main_checkout`. Der Text ist der von Claude Code, und die Verweigerung kam vor der Prüfung des Suchtexts. Bei i kam dieselbe Art Aufruf bis zu dieser Prüfung.
+- Die absoluten Edit-Regeln treffen die gleichnamigen Pfade in der Gate-Worktree nicht (`README.md`, `src/**`).
+- Option B ließ sich hier nicht live prüfen, denn diese Session startete in der Gate-Worktree. Abgedeckt ist sie durch Tests: Bash und Write über den echten Hook in `MainCheckoutHookTests.cs`, Bash und alle vier Schreibwerkzeuge in `ProtectMainCheckoutTests.cs` (Q-0209). Beide liefen grün in `scripts/test-local.sh` und in CI-Lauf 45791566366 (Head fc18343).
 
 ### Schicht 2: git-Hook reference-transaction
 
