@@ -194,7 +194,23 @@ Ergebnisse vom 26.11.2026 (Session nach der Aktivierung; Settings geprüft mit `
 
 Die Zeilen n, o, p und m oben sind die ersten Läufe. Die Wiederholung nach den Owner-Antworten steht in der nächsten Tabelle.
 
-Stand nach dem ersten Lauf: n, o, p und m offen. Wiederholung: offen.
+Stand nach dem ersten Lauf: n, o, p und m offen.
+
+Wiederholung vom 26.11.2026 nach den Owner-Antworten: jede Probe ein eigener Aufruf in `sh -c '…'`, nur absolute Pfade, kein `cd`. Ausgegeben wurden nur Exitcodes, Größen und Fehler.
+
+| Probe | Ergebnis | Bestanden |
+|---|---|---|
+| n | `mv: rename …/W/.env to …/W/moved.txt: Operation not permitted`, Exit 1; `wc`: No such file or directory | ja, die Sandbox sperrt `mv` |
+| o | `ln: …/W/.env.local: Operation not permitted`, Exit 1; `wc`: No such file or directory | ja, die Sandbox sperrt `ln` |
+| o2, `ln` | `ln: ~/.umbrarch-probe/.env: Operation not permitted`, Exit 1; `wc`: No such file or directory | ja, die Sandbox sperrt `ln` |
+| o2, `cp` | Der Befehl lief nicht. Monarch-Hook: `PreToolUse:Bash hook error: Das Kommando liest eine Credential-Datei. …` Nach Regel 2 keine Variante. | gesperrt vom Hook; die Sandbox-Schicht für `cp` ist nicht belegt |
+| o2, `ln -s` | `ln -s` Exit 0; `wc -c …/W/sl.txt: open: Operation not permitted` | ja, gesperrt an `wc` |
+| p | `ln -s` Exit 0; `wc -c …/W/sym.txt: open: Operation not permitted` | ja, gesperrt an `wc` |
+| m | `dotnet restore --disable-build-servers -m:1 -nodeReuse:false`, mit `DOTNET_CLI_TELEMETRY_OPTOUT=1` wie in `scripts/test-local.sh`: Exit 0 nach 2 s | ja |
+
+Bewertung (Zusammenfassung, kein Owner-Zitat): Kein Inhalt kam durch; jede Probe scheiterte an `ln`, `cp`, `mv` oder `wc`. Nach dem Kriterium des Owners ist die Sperre damit belegt. Einschränkung: `cp` hat der Hook abgefangen, nicht die Sandbox. Ein `cp` muss die Quelle `~/.umbrarch-probe/.env` öffnen, und dieses Öffnen sperrt die Sandbox nachweislich für `wc` (Probe a). Dass sie es auch für `cp` sperrt, ist ein Schluss daraus und nicht eigens geprobt.
+
+Aufräumen: `rm -r W` entfernte die Symlinks `sl.txt` und `sym.txt`. Bei `.env`, `.env.local` und `.env.production` meldete es `Operation not permitted`, bei `W` selbst `Directory not empty`. Die Sandbox sperrt also auch das Löschen von Dateien aus der Liste. `W` löscht der Owner im eigenen Terminal; bis dahin gilt weiter nur `git add` mit genannten Pfaden.
 
 ## 5. Danach: Lockerung des Hooks (Q-0220, nur Skizze für die Warden-Runde)
 
