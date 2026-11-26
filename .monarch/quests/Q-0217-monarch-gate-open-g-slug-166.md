@@ -3,7 +3,7 @@ id: Q-0217
 gate: G-0131
 kind: main
 rank: B
-state: in_progress
+state: in_review
 dod:
   - "gate open nach ADR-0021 §2: verweigert in einer Claude-Code-Session vor jedem git-Aufruf; prüft G (^G-\\d{4,}$) und slug (^[a-z0-9]+(-[a-z0-9]+)*$, höchstens 60 Zeichen); Haupt-Checkout aus git worktree list; git -C <main> fetch origin; git -C <main> worktree add --no-track <main>/.claude/worktrees/<G> -b monarch/<G>-<slug> origin/<integration_branch>; stdout nur der absolute Pfad, git-Ausgabe nach stderr; git-Fehler mit Exit 1 ohne Pfad; kein Ledger-Eintrag"
   - "Tests vorher rot, danach grün (tests/Monarch.Cli.Tests/GateOpenTests.cs, temporäres Repo mit Bare-Remote): Anlage nach Fetch auf neuem origin/develop ohne branch.<b>.remote; aus einer Worktree; Session-Variable verweigert ohne Branch und Worktree; ungültige Eingaben ohne git-Aufruf; Branch existiert schon; kein erwecktes Projekt"
@@ -14,5 +14,6 @@ scope:
   exclude: []
 estimate: { session_pct: 10, weekly_pct: 3, gold_usd: 0 }
 boss: "gate open legt in einem temporären Repo nach dem Fetch die Worktree auf dem neuen origin/develop an, ohne Upstream, und gibt nur den Pfad aus; in einer Claude-Code-Session entsteht nichts"
+board: { pr: 168 }
 ---
 # monarch gate open <G> <slug> (#166)

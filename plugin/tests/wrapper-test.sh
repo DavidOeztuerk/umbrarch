@@ -103,14 +103,14 @@ run "$proj" "$H" hook pre-tool-use; isask; check "in-place edit with old mtime i
 mkhome; : >"$D/.verified"; printf '#!/bin/sh\necho EVIL\n' >"$D/monarch"
 run "$proj" "$H" hook pre-tool-use; isask; check "forged stamp file does not skip verification: ask" $?
 
-# 8. ADR-0019 (Q-0187): the wrapper is 0.1.2 and only the old binary 0.1.1 is installed: fail-closed
-[ "$version" = 0.1.2 ]; check "wrapper version is 0.1.2" $?
+# 8. ADR-0019 (Q-0187), ADR-0021 §3: the wrapper is 0.1.3 and only the old binary 0.1.1 is installed: fail-closed
+[ "$version" = 0.1.3 ]; check "wrapper version is 0.1.3" $?
 mkhome; rm -rf "$D"
 old=$H/.monarch/bin/0.1.1; mkdir -p "$old"
 printf '#!/bin/sh\necho OLD "$@"\n' >"$old/monarch"; chmod +x "$old/monarch"
 printf '%s  monarch\n' "$(sha "$old/monarch")" >"$old/SHA256SUMS"
 run "$proj" "$H" hook pre-tool-use; isask; check "wrapper $version, only binary 0.1.1 installed, awakened: ask (fail-closed)" $?
-case $OUT in *"0.1.2"*) ok=0 ;; *) ok=1 ;; esac; check "the ask names the missing 0.1.2 binary" $ok
+case $OUT in *"$version"*) ok=0 ;; *) ok=1 ;; esac; check "the ask names the missing $version binary" $ok
 run "$proj" "$H" hook post-tool-use; [ "$CODE" = 0 ] && [ -z "$OUT" ]; check "same state, post-tool-use stays fail-open" $?
 
 [ "$fails" = 0 ] && echo "all wrapper tests passed" || echo "$fails wrapper test(s) failed"
