@@ -101,7 +101,15 @@ public static partial class ToolCallPolicy
         return false;
     }
 
-    /// <summary>Haupt-Checkout: <c>.git</c> ist ein Verzeichnis ohne <c>commondir</c>, und der Ordner darüber hat ein Verzeichnis <c>.monarch</c>.</summary>
+    /// <summary>Ist <paramref name="dir"/> (oder ein Ordner darüber) der Haupt-Checkout eines erweckten Projekts? Für das Briefing (HookRunner).</summary>
+    public static bool IsInMainCheckout(string dir) => IsMainCheckoutGitDir(BranchGuard.FindGitDir(dir));
+
+    /// <summary>
+    /// Haupt-Checkout (ADR-0020 §1, Q-0208): <c>.git</c> ist ein Verzeichnis, der Ordner darüber hat ein Verzeichnis <c>.monarch</c>, und
+    /// git-dir und git-common-dir sind nach realpath gleich, wie im git-Hook (<c>plugin/git-hooks/reference-transaction</c>). Das
+    /// git-common-dir steht in <c>commondir</c> (relativ zum git-dir); fehlt die Datei, ist es das git-dir. Unklar (leer, unlesbar, Ziel fehlt)
+    /// zählt als Haupt-Checkout.
+    /// </summary>
     private static bool IsMainCheckoutGitDir(string? gitDir)
     {
         if (gitDir is null) return false;
@@ -109,13 +117,37 @@ public static partial class ToolCallPolicy
         try
         {
             // Ohne Beachtung der Schreibweise: auf macOS nimmt Git auch ".GIT" an.
-            if (!string.Equals(Path.GetFileName(d), ".git", StringComparison.OrdinalIgnoreCase) || !Directory.Exists(d) || File.Exists(Path.Combine(d, "commondir"))) return false;
+            if (!string.Equals(Path.GetFileName(d), ".git", StringComparison.OrdinalIgnoreCase) || !Directory.Exists(d)) return false;
             var parent = Path.GetDirectoryName(d);
-            return parent is not null && Directory.Exists(Path.Combine(parent, ".monarch"));
+            if (parent is null || !Directory.Exists(Path.Combine(parent, ".monarch"))) return false;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
             return false;
+        }
+
+        return CommonDirEqualsGitDir(d);
+    }
+
+    /// <summary>realpath(git-common-dir) == realpath(git-dir); jede Unklarheit gibt true (fail closed).</summary>
+    private static bool CommonDirEqualsGitDir(string gitDir)
+    {
+        try
+        {
+            var file = Path.Combine(gitDir, "commondir");
+            // Ohne Datei ist git-common-dir das git-dir; ein Ordner namens commondir ist unklar. Beides zählt als Haupt-Checkout.
+            if (!File.Exists(file)) return true;
+            var line = File.ReadLines(file).FirstOrDefault()?.Trim();
+            if (string.IsNullOrEmpty(line)) return true;
+            var rs = new PathResolver("/", "/");
+            var real = rs.Resolve(gitDir, "/");
+            var common = rs.Resolve(line, real);
+            if (!Directory.Exists(common)) return true;
+            return string.Equals(real.TrimEnd('/'), common.TrimEnd('/'), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return true;
         }
     }
 }

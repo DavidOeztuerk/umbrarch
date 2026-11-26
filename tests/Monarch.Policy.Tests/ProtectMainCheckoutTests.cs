@@ -480,6 +480,49 @@ public sealed class ProtectMainCheckoutTests : IDisposable
         DenyFile("Edit", Path.Combine(_wt, "datei.cs"), _wt);
     }
 
+    /// <summary>Q-0208: Eine Datei commondir, die auf das eigene .git zeigt, macht aus dem Haupt-Checkout keine Worktree (realpath-Vergleich wie im git-Hook).</summary>
+    [Theory]
+    [InlineData(".")]
+    [InlineData("./")]
+    [InlineData("../.git")]
+    [InlineData("../.GIT")]
+    public void Commondir_pointing_at_its_own_git_dir_keeps_the_main_checkout(string commondir)
+    {
+        File.WriteAllText(Path.Combine(_main, ".git", "commondir"), commondir + "\n");
+        Deny("git checkout main", _main);
+        DenyFile("Write", Path.Combine(_main, "src", "a.cs"), _wt);
+    }
+
+    [Fact]
+    public void Commondir_given_as_absolute_path_through_a_symlink_keeps_the_main_checkout()
+    {
+        Link(Path.Combine(_tmp, "lnk-main"), _main);
+        File.WriteAllText(Path.Combine(_main, ".git", "commondir"), Path.Combine(_tmp, "lnk-main", ".git") + "\n");
+        Deny("git commit -m x", _main);
+        DenyFile("Edit", Path.Combine(_main, "src", "a.cs"), _wt);
+    }
+
+    /// <summary>Unklar heißt Haupt-Checkout: leer, unlesbar (ein Ordner) oder ein Ziel, das es nicht gibt.</summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData("dir")]
+    [InlineData("../gibt-es-nicht")]
+    public void Unclear_commondir_counts_as_main_checkout(string commondir)
+    {
+        var path = Path.Combine(_main, ".git", "commondir");
+        if (commondir == "dir") Directory.CreateDirectory(path);
+        else File.WriteAllText(path, commondir);
+        Deny("git checkout main", _main);
+        DenyFile("Write", Path.Combine(_main, "src", "a.cs"), _wt);
+    }
+
+    [Fact]
+    public void Worktree_with_commondir_to_the_common_git_dir_stays_allowed()
+    {
+        Allow("git commit -m x", _wt);
+        Assert.NotEqual(PolicyRules.ProtectMainCheckout, RunFile("Write", Path.Combine(_wt, "src", "a.cs"), _wt).Rule);
+    }
+
     [Fact]
     public void Write_outside_any_repo_is_allowed()
     {

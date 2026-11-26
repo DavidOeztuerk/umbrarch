@@ -528,8 +528,8 @@ internal static class Briefing
         }
 
         sb.AppendLine("- Hooks erzwingen Scope-Lock, geschuetzte Pfade, Secrets und deny_bash.");
-        var dotGit = Path.Combine(paths.Root, ".git");
-        if (Directory.Exists(dotGit) && !File.Exists(Path.Combine(dotGit, "commondir")))
+        // Q-0208: dieselbe Erkennung wie protect_main_checkout (realpath von git-dir und git-common-dir), nicht das Fehlen von commondir.
+        if (ToolCallPolicy.IsInMainCheckout(paths.Root))
         {
             sb.AppendLine("Warnung: Diese Session läuft im Haupt-Checkout. Die Sandbox gibt hier den ganzen Haupt-Checkout zum Schreiben frei (ADR-0020 §1). Arbeite in der Gate-Worktree.");
         }

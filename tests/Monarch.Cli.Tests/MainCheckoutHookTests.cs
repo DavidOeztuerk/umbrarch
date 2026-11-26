@@ -40,6 +40,28 @@ public class MainCheckoutHookTests
         Assert.DoesNotContain("Warnung", Briefing(p), StringComparison.Ordinal);
     }
 
+    /// <summary>Q-0208: commondir mit Ziel auf das eigene .git (git-dir == git-common-dir) ist weiter der Haupt-Checkout.</summary>
+    [Fact]
+    public void Session_start_with_commondir_pointing_at_its_own_git_dir_warns()
+    {
+        using var p = new TempProject(activeRank: "A");
+        Directory.CreateDirectory(Path.Combine(p.Root, ".git"));
+        File.WriteAllText(Path.Combine(p.Root, ".git", "commondir"), ".\n");
+        Assert.Contains(Warning, Briefing(p), StringComparison.Ordinal);
+    }
+
+    /// <summary>Q-0208: Der echte Hook verweigert Write im Haupt-Checkout auch mit commondir = ".".</summary>
+    [Fact]
+    public void Write_into_the_main_checkout_with_commondir_dot_is_denied_by_the_hook()
+    {
+        using var p = new TempProject(activeRank: "A");
+        Directory.CreateDirectory(Path.Combine(p.Root, ".git"));
+        File.WriteAllText(Path.Combine(p.Root, ".git", "commondir"), ".\n");
+        var r = p.Hook("pre-tool-use", TempProject.PreToolUse("Write", file: Path.Combine(p.Root, "src", "a.cs")));
+        Assert.Contains("\"deny\"", r.Out, StringComparison.Ordinal);
+        Assert.Contains("protect_main_checkout", string.Join('\n', p.Events().Select(e => e.Payload.ToString())), StringComparison.Ordinal);
+    }
+
     /// <summary>Belegt, dass der Hook den Haupt-Checkout bei Datei-Tools über einen Symlink als Ziel-Projekt findet.</summary>
     [Fact]
     public void Write_through_a_symlink_into_the_main_checkout_is_denied_by_the_hook()
