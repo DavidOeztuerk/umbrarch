@@ -66,12 +66,16 @@ In `CheckCi`, also für jeden Aufrufer: `quest verify`, `gate merge` (PR-Head, d
 - Unverändert: Pro Name zählt der neueste Lauf, nur `success` ist grün. Fehlt ein Pflicht-Check, ist das Ergebnis Pending, und `gate merge` verweigert mit „develop läuft noch“ (`GateMergeCommands.cs:452-455`). Checks ohne Workflow-Lauf (andere Apps) lässt R1 unberührt; mit R3 zählen sie nur, wenn ihr Name in der Liste steht.
 
 **Datenquelle (Vorschlag):** zusätzlich `GET /repos/{o}/{r}/actions/runs?head_sha={sha}` (mit Paging). Jeder Check-Run nennt seine `check_suite.id`, jeder Workflow-Lauf `check_suite_id` und `event`. Darüber bekommt jeder Check das Event seines Laufs. Die Regel selbst steht in `CheckCi`. Scheitert die Abfrage, verweigern `quest verify` und `gate merge` wie bei jedem Forge-Fehler (fail-closed).
+- **Reihenfolge (Warden major 1):** zuerst die Check-Runs, danach `actions/runs`. Ein Workflow-Lauf entsteht vor seinen Check-Runs. Jede Suite aus der ersten Abfrage steht darum in der zweiten, außer der Lauf ist in der Zwischenzeit verschwunden.
+- **Actions-Check mit unbekannter Suite (Warden major 1, Vorschlag):** Stammt ein Check von GitHub Actions (`app.slug` = `github-actions`) und steht seine Suite nicht in `actions/runs`, lässt sich nicht sagen, ob er aus einem Nachtlauf kommt. Dann liefert `CheckCi` Pending mit Name und Suite (fail-closed); `gate merge` verweigert mit „develop läuft noch“. Checks anderer Apps haben keinen Workflow-Lauf und zählen wie heute.
 
 **Folgen, offen benannt:**
 - *Lockerung (Owner-Entscheid, R1):* Ein roter Nachtlauf hält develop nicht mehr für rot, wenn der Push-Lauf am selben Commit grün ist. Er bleibt in Actions sichtbar.
 - *R3 gilt per Code für jeden Aufrufer.* `CheckCi` liest `evidence.required` schon heute für alle Aufrufer oben (`EvidenceCommands.cs:163-173` am Stand 5681f44). Mit dem Commit von `system.yaml` zählen darum auch bei `quest verify`, am PR-Head, bei `gate check` und in der Forge-Sicht nur die drei Namen. Owner-Entscheid 2 nennt #167, also `gate merge`; für den Rest gilt Owner-Antwort 2 („so lassen“, „Offen“ 2).
 - *Lockerung (Owner-Entscheid, R3):* Checks außerhalb der drei Pflicht-Checks blockieren `gate merge` nicht mehr, etwa `build-test (macos-latest)` und `aot (osx-arm64)`. macOS läuft für develop nur im Nachtlauf und bei `workflow_dispatch` (`.github/workflows/ci.yml:40-42`). Die Branch-Protection von main verlangt `build-test (macos-latest)`, `build-test (ubuntu-latest)`, `plugin` und `aot (linux-x64)`, aber nicht `aot (osx-arm64)` (Belege). Ein Fehler in `build-test (macos-latest)` blockiert also erst den PR nach main. **Lücke (offen benannt, nichts gebaut; Lesart der Session: Owner-Antwort 2 gilt für den Teil, den main nicht verlangt):** Ein Fehler in `aot (osx-arm64)`, also im macOS-AOT-Build mit dem Latenz-Gate, blockiert weder `gate merge` noch den PR nach main.
-- *Strenger als heute (R1):* Ist der Push-Lauf rot und ein späterer Nachtlauf am selben Commit grün, galt develop bisher als grün. Künftig bleibt es rot, bis der Push-Lauf wiederholt ist.
+- *Strenger als heute (R1):* Ist der Push-Lauf rot und ein späterer Nachtlauf am selben Commit grün, galt develop bisher als grün. Künftig bleibt es rot, bis ein Lauf grün ist, der kein Nachtlauf ist (Wiederholung des Push-Laufs oder `workflow_dispatch`).
+- *Strenger als heute (R1, Warden m1):* Hat ein develop-Commit keinen Lauf außer Nachtläufen (etwa ein Squash mit Skip-Marker oder ein gelöschter Push-Lauf), machte ihn bisher der Nachtlauf grün. Künftig fehlen die Pflicht-Checks, und das Ergebnis bleibt Pending.
+- *Strenger als heute (Actions-Check mit unbekannter Suite):* Pending statt Zählen, siehe „Datenquelle“.
 
 ### macOS-Engpass im Nachtlauf
 
@@ -89,13 +93,15 @@ In `CheckCi`, also für jeden Aufrufer: `quest verify`, `gate merge` (PR-Head, d
   2. Ein roter Check nur aus einem Nachtlauf, Push-Lauf grün: merged. Heute rot.
   3. Push-Lauf rot, späterer Nachtlauf grün: verweigert („not green“). Heute rot (am alten Stand überdeckt der grüne Nachtlauf den roten Push-Lauf, der Merge geht durch).
   4. Mit R3: Pflicht-Check nur im Nachtlauf vorhanden: verweigert („develop läuft noch“, der Name steht in der Meldung). Heute rot.
-  5. Ein noch wartender Job eines Nachtlaufs hält develop nicht als „läuft noch“ fest. Heute rot.
+  5. Mit R3: ein noch wartender Pflicht-Check eines Nachtlaufs (`build-test (ubuntu-latest)`) hält develop nicht als „läuft noch“ fest. Heute rot.
   6. Mit R3: ein roter Check außerhalb der Liste blockiert nicht, ein roter Pflicht-Check blockiert. Wächter.
   7. `actions/runs` antwortet mit 500: verweigert („merge failed“). Heute rot.
   8. `Forge.Required` liest aus der Fluss-Liste genau die drei Namen (direkter Aufruf, nicht über `gate merge`). Wächter.
   9. Mit R3 ist `build-test (ubuntu-latest)` rot und `aot (linux-x64)` fehlt (nur der Platzhalter): verweigert mit „develop läuft noch“, auch mit belegtem Fix-PR. Wächter für „Offen“ 3.
+  10. Push-Lauf rot, neuerer grüner Actions-Check, dessen Suite in `actions/runs` fehlt: verweigert („develop läuft noch“, Name und Suite in der Meldung). Heute rot (der grüne Check überdeckt den roten).
+  11. Ein roter Check ohne Workflow-Lauf (andere App, ohne Suite) zählt weiter: verweigert („not green“). Wächter.
 - `tests/Monarch.Cli.Tests/ForgeClearViewTests.cs:156`: Der Test zählt die Requests je PR. Mit R1 kommt `actions/runs` einmal je PR dazu; der Test prüft das ausdrücklich (3 statt 2).
-- Der Fake in `tests/Monarch.Cli.Tests/Part2Support.cs` hat eine Route für `actions/runs`, im Default eine leere Liste. Ohne Eintrag zählt jeder Check wie heute.
+- Der Fake in `tests/Monarch.Cli.Tests/Part2Support.cs` hat eine Route für `actions/runs`, im Default eine leere Liste. Checks aus `FakeForge.Run` haben weder Suite noch App und zählen darum wie heute.
 
 ## 2. gate open (#166)
 

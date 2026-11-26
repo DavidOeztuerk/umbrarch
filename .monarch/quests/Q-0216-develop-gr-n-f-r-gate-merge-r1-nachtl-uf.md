@@ -15,5 +15,6 @@ scope:
   exclude: []
 estimate: { session_pct: 15, weekly_pct: 4, gold_usd: 0 }
 boss: "gate merge hält develop am Fall aus #167 (alter Nachtlauf mit Platzhalter skipped, neuere Läufe grün) für grün, mit R1 allein und mit R3; Push rot plus Nachtlauf grün bleibt rot"
+board: { pr: 168 }
 ---
 # develop grün für gate merge: R1 Nachtläufe zählen nicht, R3 evidence.required (#167)
