@@ -28,10 +28,24 @@ public static partial class ToolCallPolicy
         return dir is not null && IsMainCheckoutGitDir(BranchGuard.FindGitDir(dir));
     }
 
+    /// <summary>Option B (ADR-0020 §1, Q-0209): Deny, wenn die Startwurzel der Session ein Haupt-Checkout ist und das Werkzeug schreiben kann.</summary>
+    /// Lesen (Read, Grep, Glob …) bleibt erlaubt. Die Wurzel wird per realpath aufgelöst; ein Unterordner des Haupt-Checkouts zählt mit.
+    public static PolicyDecision? MainCheckoutSession(string? toolName, string? sessionRoot)
+    {
+        if (toolName is not ("Bash" or "Edit" or "Write" or "MultiEdit" or "NotebookEdit")) return null;
+        if (string.IsNullOrEmpty(sessionRoot) || !Path.IsPathRooted(sessionRoot)) return null;
+        var root = new PathResolver("/", "/").Resolve(sessionRoot, "/");
+        return IsInMainCheckout(root) ? PolicyDecision.Deny(PolicyRules.ProtectMainCheckout, SessionReason) : null;
+    }
+
+    /// <summary>Grund wörtlich nach Owner-Entscheid vom 26.11.2026.</summary>
+    private const string SessionReason = "Session im Haupt-Checkout gestartet; starte sie in der Gate-Worktree neu";
+
     private const string AmbiguousReason = "Arbeitsverzeichnis nicht eindeutig (cd/pushd-Variante); nutze git -C <Gate-Worktree>.";
 
     private static PolicyDecision? ProtectMainCheckout(ToolCall call, PolicyContext ctx, List<BashAnalysis.Segment> segments, Canon paths)
     {
+        if (MainCheckoutSession(call.ToolName, ctx.SessionRoot) is { } session) return session;
         if (call.ToolName is "Edit" or "Write" or "MultiEdit" or "NotebookEdit") return FileToolTargetsMainCheckout(call, ctx) ? PolicyDecision.Deny(PolicyRules.ProtectMainCheckout, FileToolReason) : null;
         if (call.ToolName != "Bash") return null;
         if (call.Command is { } text && BannedWords.Any(w => text.Contains(w, StringComparison.OrdinalIgnoreCase)))

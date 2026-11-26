@@ -142,6 +142,9 @@ public sealed record PolicyContext(string ProjectRoot, ActiveQuest? ActiveQuest,
 
     /// <summary>Wert von <c>PATH</c> für die Auflösung eines nackten <c>monarch</c>; null: <c>$PATH</c> des Hook-Prozesses.</summary>
     public string? PathEnv { get; init; }
+
+    /// <summary>Startwurzel der Session (<c>CLAUDE_PROJECT_DIR</c>), unverändert durch EnterWorktree und cd; null: unbekannt (ADR-0020 §1, Q-0209).</summary>
+    public string? SessionRoot { get; init; }
 }
 
 /// <summary>Modus der Penalty Zone.</summary>

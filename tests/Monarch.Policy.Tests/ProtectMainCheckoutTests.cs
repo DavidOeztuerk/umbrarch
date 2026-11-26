@@ -523,6 +523,59 @@ public sealed class ProtectMainCheckoutTests : IDisposable
         Assert.NotEqual(PolicyRules.ProtectMainCheckout, RunFile("Write", Path.Combine(_wt, "src", "a.cs"), _wt).Rule);
     }
 
+    private const string SessionReason = "Session im Haupt-Checkout gestartet; starte sie in der Gate-Worktree neu";
+
+    private PolicyDecision RunInSession(string? sessionRoot, ToolCall call) =>
+        ToolCallPolicy.Evaluate(call, Ctx() with { SessionRoot = sessionRoot });
+
+    /// <summary>Q-0209 (Option B): Startwurzel im Haupt-Checkout sperrt Bash und alle Datei-Schreibwerkzeuge, auch mit cwd in der Worktree.</summary>
+    [Theory]
+    [InlineData("Bash")]
+    [InlineData("Write")]
+    [InlineData("Edit")]
+    [InlineData("MultiEdit")]
+    [InlineData("NotebookEdit")]
+    public void Session_started_in_the_main_checkout_denies_bash_and_file_writers(string tool)
+    {
+        var call = tool == "Bash" ? new ToolCall("Bash", Command: "ls", Cwd: _wt) : new ToolCall(tool, FilePath: Path.Combine(_wt, "src", "a.cs"), Cwd: _wt);
+        var d = RunInSession(_main, call);
+        Assert.Equal(PolicyDecisionKind.Deny, d.Kind);
+        Assert.Equal(PolicyRules.ProtectMainCheckout, d.Rule);
+        Assert.Equal(SessionReason, d.Reason);
+        var p = ToolCallPolicy.EvaluateProtection(call, Ctx() with { SessionRoot = _main });
+        Assert.Equal(PolicyDecisionKind.Deny, p.Kind);
+        Assert.Equal(SessionReason, ToolCallPolicy.MainCheckoutSession(tool, _main)?.Reason);
+    }
+
+    [Theory]
+    [InlineData("Read")]
+    [InlineData("Grep")]
+    [InlineData("Glob")]
+    public void Session_started_in_the_main_checkout_still_reads(string tool)
+    {
+        var d = RunInSession(_main, new ToolCall(tool, FilePath: Path.Combine(_main, "src", "a.cs"), Cwd: _wt));
+        Assert.NotEqual(PolicyRules.ProtectMainCheckout, d.Rule);
+        Assert.Null(ToolCallPolicy.MainCheckoutSession(tool, _main));
+    }
+
+    [Fact]
+    public void Session_root_below_or_through_a_symlink_into_the_main_checkout_denies()
+    {
+        Link(Path.Combine(_tmp, "lnk-root"), _main);
+        Assert.Equal(SessionReason, RunInSession(Path.Combine(_tmp, "lnk-root"), new ToolCall("Bash", Command: "ls", Cwd: _wt)).Reason);
+        Assert.Equal(SessionReason, RunInSession(Path.Combine(_main, "src"), new ToolCall("Bash", Command: "ls", Cwd: _wt)).Reason);
+    }
+
+    [Fact]
+    public void Session_started_in_a_worktree_or_without_root_is_not_blocked_by_option_b()
+    {
+        Assert.NotEqual(SessionReason, RunInSession(_wt, new ToolCall("Bash", Command: "ls", Cwd: _wt)).Reason);
+        Assert.NotEqual(SessionReason, RunInSession(null, new ToolCall("Bash", Command: "ls", Cwd: _wt)).Reason);
+        Assert.NotEqual(SessionReason, RunInSession("", new ToolCall("Bash", Command: "ls", Cwd: _wt)).Reason);
+        Assert.NotEqual(SessionReason, RunInSession(_plain, new ToolCall("Bash", Command: "ls", Cwd: _plain)).Reason);
+        Assert.Null(ToolCallPolicy.MainCheckoutSession("Bash", _wt));
+    }
+
     [Fact]
     public void Write_outside_any_repo_is_allowed()
     {

@@ -3,7 +3,7 @@ id: Q-0209
 gate: G-0130
 kind: main
 rank: A
-state: proposed
+state: in_review
 dod:
   - "Owner-Entscheid 3 vom 26.11.2026 (Chat): Ist realpath von CLAUDE_PROJECT_DIR ein Haupt-Checkout, verweigert PreToolUse jeden Bash-Aufruf und Edit/Write/MultiEdit/NotebookEdit mit dem Grund \"Session im Haupt-Checkout gestartet; starte sie in der Gate-Worktree neu\"; Lesen bleibt erlaubt"
   - "Auch wenn das cwd außerhalb jedes erweckten Projekts liegt"

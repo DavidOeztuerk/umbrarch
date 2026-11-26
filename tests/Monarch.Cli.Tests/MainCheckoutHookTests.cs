@@ -62,6 +62,60 @@ public class MainCheckoutHookTests
         Assert.Contains("protect_main_checkout", string.Join('\n', p.Events().Select(e => e.Payload.ToString())), StringComparison.Ordinal);
     }
 
+    private const string SessionReason = "Session im Haupt-Checkout gestartet; starte sie in der Gate-Worktree neu";
+
+    private static Dictionary<string, string?> ProjectDir(string dir) => new() { ["CLAUDE_PROJECT_DIR"] = dir };
+
+    /// <summary>Q-0209 (Option B): CLAUDE_PROJECT_DIR im Haupt-Checkout, der echte Hook verweigert Bash und Write, Read bleibt.</summary>
+    [Fact]
+    public void Hook_denies_bash_and_write_when_the_session_started_in_the_main_checkout()
+    {
+        using var p = new TempProject(activeRank: "A");
+        Directory.CreateDirectory(Path.Combine(p.Root, ".git"));
+        var bash = p.Run(["hook", "pre-tool-use"], TempProject.PreToolUse("Bash", command: "ls"), vars: ProjectDir(p.Root));
+        Assert.Contains("\"deny\"", bash.Out, StringComparison.Ordinal);
+        Assert.Contains(SessionReason, bash.Out, StringComparison.Ordinal);
+        var write = p.Run(["hook", "pre-tool-use"], TempProject.PreToolUse("Write", file: Path.Combine(p.Root, "x.txt")), vars: ProjectDir(p.Root));
+        Assert.Contains(SessionReason, write.Out, StringComparison.Ordinal);
+        var read = p.Run(["hook", "pre-tool-use"], TempProject.PreToolUse("Read", file: Path.Combine(p.Root, "README.md")), vars: ProjectDir(p.Root));
+        Assert.DoesNotContain(SessionReason, read.Out, StringComparison.Ordinal);
+        Assert.Contains("protect_main_checkout", string.Join('\n', p.Events().Select(e => e.Payload.ToString())), StringComparison.Ordinal);
+    }
+
+    /// <summary>Auch wenn das cwd außerhalb jedes erweckten Projekts liegt (cd /tmp), bleibt die Sperre.</summary>
+    [Fact]
+    public void Hook_denies_bash_from_a_main_checkout_session_even_with_cwd_outside_any_project()
+    {
+        using var p = new TempProject(activeRank: "A");
+        Directory.CreateDirectory(Path.Combine(p.Root, ".git"));
+        var outside = Path.Combine(Path.GetTempPath(), "monarch-out-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outside);
+        try
+        {
+            var r = p.Run(["hook", "pre-tool-use"], TempProject.PreToolUse("Bash", command: "ls"), cwd: outside, vars: ProjectDir(p.Root));
+            Assert.Contains("\"deny\"", r.Out, StringComparison.Ordinal);
+            Assert.Contains(SessionReason, r.Out, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(outside, true);
+        }
+    }
+
+    [Fact]
+    public void Hook_without_project_dir_or_with_a_worktree_root_does_not_apply_option_b()
+    {
+        using var p = new TempProject(activeRank: "A");
+        Directory.CreateDirectory(Path.Combine(p.Root, ".git"));
+        Assert.DoesNotContain(SessionReason, p.Run(["hook", "pre-tool-use"], TempProject.PreToolUse("Bash", command: "ls")).Out, StringComparison.Ordinal);
+        using var wt = new TempProject(activeRank: "A");
+        var gitDir = Path.Combine(p.Root, ".git", "worktrees", "G-1");
+        Directory.CreateDirectory(gitDir);
+        File.WriteAllText(Path.Combine(gitDir, "commondir"), "../..\n");
+        File.WriteAllText(Path.Combine(wt.Root, ".git"), "gitdir: " + gitDir + "\n");
+        Assert.DoesNotContain(SessionReason, wt.Run(["hook", "pre-tool-use"], TempProject.PreToolUse("Bash", command: "ls"), vars: ProjectDir(wt.Root)).Out, StringComparison.Ordinal);
+    }
+
     /// <summary>Belegt, dass der Hook den Haupt-Checkout bei Datei-Tools über einen Symlink als Ziel-Projekt findet.</summary>
     [Fact]
     public void Write_through_a_symlink_into_the_main_checkout_is_denied_by_the_hook()

@@ -104,6 +104,18 @@ internal static class HookRunner
         var paths = primary ?? (targets.Count > 0 ? targets[0] : null);
         if (paths is null)
         {
+            // Option B (ADR-0020 §1, Q-0209): Auch ohne erwecktes Projekt um das cwd (etwa nach cd /tmp) bleibt eine Session gesperrt,
+            // die im Haupt-Checkout gestartet ist. Ohne Projekt gibt es kein Ledger; die Entscheidung geht nur an Claude Code.
+            if (evt == "pre-tool-use" && parseError is null && ToolCallPolicy.MainCheckoutSession(input?.ToolName, env.GetVar("CLAUDE_PROJECT_DIR")) is { } session)
+            {
+                Emit(env, new HookSpecificOutput
+                {
+                    HookEventName = "PreToolUse",
+                    PermissionDecision = "deny",
+                    PermissionDecisionReason = session.Reason,
+                });
+            }
+
             return 0;
         }
 
@@ -382,7 +394,7 @@ internal static class HookRunner
             activeFailed = true;
         }
 
-        var ctx = new PolicyContext(paths.Root, quest, false, config.ToPolicyOptions());
+        var ctx = new PolicyContext(paths.Root, quest, false, config.ToPolicyOptions()) { SessionRoot = env.GetVar("CLAUDE_PROJECT_DIR") };
         var decision = full ? ToolCallPolicy.Evaluate(call, ctx) : ToolCallPolicy.EvaluateProtection(call, ctx);
         // A config error only asks from rank A upwards; below that the defaults decide on their own.
         if (activeFailed || (failed && quest is { Rank: >= Rank.A }))
