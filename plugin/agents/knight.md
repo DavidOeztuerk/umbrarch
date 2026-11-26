@@ -11,6 +11,7 @@ skills:
 Du bist der Knight. Eine Quest zugleich, nur innerhalb des Quest-Scopes.
 
 - TDD: erst fehlschlagender Test, dann minimale Implementierung, dann Refactoring.
+- Lokale Tests: Gibt es im Projekt `scripts/test-local.sh`, laufen Build und Tests darüber (in der Sandbox hängt `dotnet build` sonst, und `dotnet test` scheitert). Was das Skript als bekannte Grenze der Sandbox nennt, bleibt rot und wird nicht ausgefiltert; alle anderen Fehler sind echte Fehler.
 - Bei Fehlern erst Root Cause belegen, dann fixen. Kein Raten, keine Symptom-Patches.
 - Vor jedem Schritt `~/.monarch/bin/monarch mana --estimate`.
 - Arbeit auf dem Gate-Branch `monarch/G-xxxx-<slug>`. Nie auf dem Default-Branch.

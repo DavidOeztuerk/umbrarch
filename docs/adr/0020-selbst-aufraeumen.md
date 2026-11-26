@@ -2,7 +2,7 @@
 
 - Status: Eine frühere Fassung hat der Warden für develop freigegeben (schmale Prüfung des Fixes, approve, PR #163, Kommentar `#issuecomment-7079968810`). Die jetzige Fassung mit dem Bedrohungsmodell vom 25.11.2026 (§1) ist weder vom Warden noch vom Owner freigegeben. Owner-Fragen siehe „Offen“.
 - Datum: 2026-11-22, §1 neu am 2026-11-25
-- Gate: G-0130, Quests Q-0192 bis Q-0204
+- Gate: G-0130, Quests Q-0192 bis Q-0205
 - Bezug: #46, #161, #74, #139, #16, #81, #44, #36, ADR-0003, ADR-0004, ADR-0007, ADR-0008, ADR-0010, ADR-0011, ADR-0012, ADR-0015, ADR-0018, ADR-0019
 - Fassung: Designrunde 1 (`#issuecomment-7078646801`), Delta-Runde (`#issuecomment-7079794677`), Fix und schmale Prüfung (`#issuecomment-7079968810`); §1 danach nach der Schlussrunde (`#issuecomment-7161665432`) und der Delta-Runde zu Q-0200 (`#issuecomment-7167800109`)
 
@@ -110,7 +110,7 @@ Was die Claude-Code-Doku sagt (`code.claude.com/docs/en/sandboxing` und `code.cl
 
 Folgen (Zusammenfassung): Die Sandbox gilt für jede Session in jedem Projekt. Andere Projekte brauchen vielleicht weitere Domains; im Auto-Modus lehnt Claude Code fremde Hosts ab (Abschnitt „Hosts outside your allowed domains“). Mit `failIfUnavailable` startet Claude Code nicht, wenn die Sandbox nicht startet; laut settings-reference „Claude Code exits with an error at startup when `sandbox.enabled` is `true` but the sandbox can't start.“
 
-**Befehl für den Owner (Schicht 1).** Er legt zuerst eine Sicherung `~/.claude/settings.json.bak-<datum-zeit>` an und fügt dann mit python3 den Schlüssel `sandbox` ein. Er bricht ab, ohne etwas zu ändern, wenn die Datei fehlt, kein gültiges JSON ist oder `sandbox` schon existiert. Die Werte der anderen Schlüssel prüft er nach dem Schreiben; die Einrückung der Datei wird neu gesetzt. Gelöscht wird nichts. Ist die Datei ein Symlink, ändert er das Ziel des Links, der Link bleibt. Getestet am 25.11.2026 im Scratchpad unter zsh (nur der Pfad ersetzt), damals noch mit der Zeile `allowUnixSockets`: Einfügen, zweiter Lauf mit Abbruch, fehlende Datei mit Abbruch, Symlink (Link bleibt, Ziel bekommt `sandbox`). Ohne diese Zeile hat der Owner den Befehl am 26.11.2026 ausgeführt. Der Block in `~/.claude/settings.json` hat danach dieselben Werte wie der Inhalt oben (gelesen mit dem Read-Werkzeug am 26.11.2026, Zeilen 99-127). Anders als bei diesem Befehl steht dort `network` vor `filesystem`; die Reihenfolge der Schlüssel ändert in JSON nichts.
+**Befehl für den Owner (Schicht 1).** Er legt zuerst eine Sicherung `~/.claude/settings.json.bak-<datum-zeit>` an und fügt dann mit python3 den Schlüssel `sandbox` ein. Er bricht ab, ohne etwas zu ändern, wenn die Datei fehlt, kein gültiges JSON ist oder `sandbox` schon existiert. Die Werte der anderen Schlüssel prüft er nach dem Schreiben; die Einrückung der Datei wird neu gesetzt. Gelöscht wird nichts. Ist die Datei ein Symlink, ändert er das Ziel des Links, der Link bleibt. Getestet am 25.11.2026 im Scratchpad unter zsh (nur der Pfad ersetzt), damals noch mit der Zeile `allowUnixSockets`: Einfügen, zweiter Lauf mit Abbruch, fehlende Datei mit Abbruch, Symlink (Link bleibt, Ziel bekommt `sandbox`). Ohne diese Zeile hat der Owner den Befehl am 26.11.2026 ausgeführt. Der Block in `~/.claude/settings.json` hat danach dieselben Werte wie der Inhalt oben (gelesen mit dem Read-Werkzeug am 26.11.2026, Zeilen 99-127). Anders als bei diesem Befehl steht dort `network` vor `filesystem`; die Reihenfolge der Schlüssel ändert in JSON nichts. Spätere Ergänzungen: „Zweite Runde nach der Aktivierung“.
 
 ```sh
 python3 -I - "$HOME/.claude/settings.json" <<'PY'
@@ -200,6 +200,45 @@ Lesart der Session:
 - `/bin/ps` darf in der Sandbox nicht starten. Der Hook läuft außerhalb der Sandbox (Doku-Zusammenfassung oben); der eine rote Test ist eine Grenze der Sandbox und kein Fehler im Code.
 - Mit `isolation: worktree` legt Claude Code die Worktree auf `origin/HEAD` an (8caa41c, origin/main), nicht auf develop. Für die Dauer des Agenten stand die Agent-Worktree auch im Schreibbereich der Session. Nach dem Ende blieben beide Worktrees stehen.
 - `denyWrite` gilt auch für Pfade, die es noch nicht gibt, und für das Ziel einer Umbenennung (Grundlage für Option C unten). Nicht getestet ist das Umbenennen eines Ordners über einem gesperrten Pfad (etwa `.git/refs` mit `refs/heads/develop` darin). Das prüft der Warden gezielt.
+
+### Zweite Runde nach der Aktivierung (26.11.2026)
+
+Owner, wörtlich: „Option C ist ausgeführt (24 Einträge in denyWrite).“ und „Ich habe sandbox.enableWeakerNetworkIsolation: true gesetzt (dein Befehl 2).“ Damit weichen die User-Settings vom Inhalt (Vorschlag) oben in zwei Punkten ab: `enableWeakerNetworkIsolation` und die 24 Einträge aus Option C in `denyWrite`.
+
+Owner-Entscheide vom 26.11.2026, wörtlich:
+- „TLS: enableWeakerNetworkIsolation wie empfohlen, keine excludedCommands.“
+- „dotnet lokal: neue Quest in G-0130. scripts/test-local.sh baut mit --disable-build-servers -m:1 -nodeReuse:false und startet die vier Test-Apps direkt, Exitcode = Fehler, wenn eine App fehlschlägt. Den /bin/ps-Test nicht aufweichen und nicht ausfiltern; das Skript nennt ihn als bekannte Grenze der Sandbox. Standardregel und Knight-Skill: lokale Tests über dieses Skript. CI unverändert.“
+- „Neuer Befund isolation: worktree (Basis origin/HEAD = main): Regel in die Skills, dass Knights nie mit isolation: worktree laufen; Punkt in #164.“
+- „/bin/ps-Test: bleibt als bekannte Grenze. Aufräumen nach dem Merge: gate cleanup mache ich vorerst im eigenen Terminal; SKILL.md:16-17 und :72 entsprechend anpassen; die Frage "worktree remove aus der Sandbox" kommt ins Issue zu gate open (anlegen, Milestone v0.2).“
+
+Umgesetzt in Q-0205: `scripts/test-local.sh`, Standardregel 2 (Aufräumen, Checkliste Schritt 10, Fallen-Liste), `plugin/skills/quest/SKILL.md`, `plugin/agents/knight.md`, Tests in `RegelnTextTests`.
+
+**Nachtest TLS** (mit `enableWeakerNetworkIsolation`):
+
+| Befehl | Ergebnis |
+|---|---|
+| `gh pr checks 163` | Exit 0, vier Checks `pass` |
+| `monarch quest list` | Exit 0, ohne „forge not reachable“, Status „cleared (Forge)“ aus GitHub |
+| `dotnet restore --force-evaluate --no-http-cache` (normaler Audit) | Exit 0 |
+| danach `dotnet restore` | „Alle Projekte sind für die Wiederherstellung auf dem neuesten Stand.“, Exit 0 |
+| `scripts/test-local.sh` | Exit 1: Build grün; Domain 97/0, Policy 1443/0; Infrastructure 1 Fehler `LedgerHeadTreeTests.A_missing_blob_in_an_existing_repository_is_a_finding_not_unchanged` (einzeln dreimal grün, im vollen Lauf Befund für `.monarch/ledger` statt für die Datei; zeitabhängig, vorbestehend, Punkt in #164); Cli 758 mit 1 Fehler, dem bekannten `/bin/ps`-Test |
+
+**Proben für den Beweis** (Definition des Owners, laut Owner aus seinem Prompt vom 25.11.2026, im Chat vom 26.11.2026 wörtlich wiederholt; eine zsh-Datei im Scratchpad, `zsh <datei>`; nach jeder Probe Vergleich von develop, HEAD, `ls -l .git/index`, getrackten Änderungen, `index.lock` und `SANDBOX-PROBE`):
+
+| Probe | pwd vor `git commit` | Ausgabe | Exit | Zustand |
+|---|---|---|---|---|
+| a1 `cd <main>; cd /tmp; cd -d /tmp; cd -` | `<main>` | `cd: string not in pwd: -d`, dann „fatal: unable to write new index file“ | 128 | unverändert |
+| a2 `mkdir -- -x && cd -x/../../../..` | `<main>` | „fatal: unable to write new index file“ | 128 | unverändert |
+| a3 `cd <main>; pushd /tmp; cd -- +1` | `<main>` | „fatal: unable to write new index file“ | 128 | unverändert |
+| a4 `cd G-0130 ../../..` | `/Users/davidozturk/Projects` (nicht `<main>`) | „fatal: not a git repository (or any of the parent directories): .git“ | 128 | unverändert |
+| a4b (Zusatz der Session) `cd G-0130 ../..` | `<main>` | „fatal: unable to write new index file“ | 128 | unverändert |
+| b `git -C <main> commit --allow-empty -m SANDBOX-PROBE` | – | „fatal: unable to write new index file“ | 128 | unverändert |
+| c `touch <main>/SANDBOX-PROBE` | – | „Operation not permitted“ | 1 | unverändert |
+| d `git -C <main> reset --hard` | – | „fatal: Could not write new index file.“ | 128 | unverändert |
+
+Vorher und nachher: develop `dfa56649c346e34229e3d093c524a1c43c089ffa`, keine geänderten getrackten Dateien, `.git/index` 52290 Bytes vom 22. Nov., kein `index.lock`. Letzter Commit: `dfa56649…` „G-0129: Mana-Grenze = Arbeitsgrenze, je Plan und Modell (#156) (#160)“. Den Ordner `-x` hat das Skript danach entfernt.
+
+Lesart der Session: Alle Proben scheitern an Schicht 1, schon beim Schreiben des Index. Schicht 2 kommt dabei nicht zum Zug. a4 trifft `<main>` mit `../../..` nicht; die Zusatzprobe a4b mit `../..` trifft es und hält.
 
 ### Schicht 2: git-Hook reference-transaction
 
@@ -425,7 +464,7 @@ Für kritiker und fremde Agenten (`general-purpose` u. a.) gibt es keinen sauber
 
 ## 6. gate cleanup
 
-- `monarch gate cleanup <G>` (nur Main), aus dem Haupt-Checkout nach ExitWorktree. Der Befehl findet die Worktree über `git worktree list --porcelain` am Branch `monarch/<G>-…`. Sie muss ein verknüpfter Worktree unter `.claude/worktrees/` sein.
+- `monarch gate cleanup <G>` (nur Main), aus dem Haupt-Checkout nach ExitWorktree. Mit der Sandbox führt ihn vorerst der Owner im eigenen Terminal aus (Owner-Entscheid vom 26.11.2026, §1 „Zweite Runde nach der Aktivierung“); dort läuft kein Hook. Der Befehl findet die Worktree über `git worktree list --porcelain` am Branch `monarch/<G>-…`. Sie muss ein verknüpfter Worktree unter `.claude/worktrees/` sein.
 - Ablehnung, wenn das cwd in der Worktree liegt (der Hook würde dort weiter Ledger-Zeilen schreiben), wenn `ledger verify` in der Worktree Befunde hat oder wenn für das Gate nach dem letzten `GateMerged` kein `IntegrationRunChecked` mit `green` vorliegt (Standardregel 2, Schritt 1). Ohne `GateMerged` kommt so nie ein `[skip ci]` vor dem Merge auf den Branch.
 - Ablauf, alles per `git -C`: Prüfung auf gestagte Dateien außerhalb `.monarch` (`git -C <wt> diff --cached --name-only --no-renames`, Abbruch bei Exit ≠ 0 oder bei einem Treffer), dann `GateCleanedUp` in die Worktree schreiben, `git -C <wt> add .monarch`, `git -C <wt> commit -m "<G>: Monarch-Stand nach Merge [skip ci]" -- .monarch` (der pre-commit-Hook läuft; schlägt er an, stoppt der Befehl und meldet den Fund), `git -C <wt> push origin monarch/<G>-…` (ausdrücklicher Refspec, nur der Gate-Branch), `git -C <haupt> worktree remove <wt>` ohne `--force`.
 - Verweigert git das Entfernen, nennt Monarch Grund und Dateien (`git -C <wt> status --porcelain`) und endet mit Exit 1. Kein Text schlägt `--force` vor.
@@ -435,7 +474,7 @@ Für kritiker und fremde Agenten (`general-purpose` u. a.) gibt es keinen sauber
 ## Nur durch den Main
 
 `gate cleanup`, `gate carry` und `gate move-quest` verweigert der Hook jedem Shadow, wie heute `gate merge|verdict|check` (`ProtectBranchesRule.cs:41-56`). Die Liste in `GateOnlyMain` bekommt die drei Unterbefehle dazu (Q-0197).
-- Der Bash-Aufruf selbst läuft im Haupt-Checkout. Seine Hook-Zeilen landen dort (bestehende Lücke: untracked Ledger-Dateien im Haupt-Checkout).
+- Der Bash-Aufruf selbst läuft im Haupt-Checkout. Seine Hook-Zeilen landen dort (bestehende Lücke: untracked Ledger-Dateien im Haupt-Checkout). Solange der Owner `gate cleanup` im eigenen Terminal ausführt (§1 „Zweite Runde nach der Aktivierung“), läuft dabei kein Hook und es entstehen keine Hook-Zeilen.
 
 ## 7. Merge-Methode je Repo
 
@@ -484,4 +523,4 @@ Befund ohne Umbau: Der Hook behandelt einen `general-purpose`-Agenten wie jeden 
 1. Weitere schreibende Git-Befehle im Haupt-Checkout sperren (`add`, `restore`, `clean`, `cherry-pick`, `revert`, `am`, `apply`, `mv`, `rm`, `branch -f`, `tag`, `update-ref`)? Owner-Entscheid vom 25.11.2026, wörtlich: „Nicht in diesem Gate. Als eigener Punkt in #164.“
 2. Status direkt nach dem Merge auf develop statt mit dem nächsten Gate: Das braucht eine Ausnahme im GitHub-Branchschutz von develop. Owner-Entscheid vom 25.11.2026, wörtlich: „Nein.“
 3. Laufende Neuberechnung der Shadow-Kosten aus neuen Läufen (Issue für v0.2). Owner-Entscheid vom 25.11.2026, wörtlich: „Issue, wie vorgeschlagen.“ Angelegt als #165.
-4. TLS unter Seatbelt (Vorschlag, Beleg unter „Test nach der Aktivierung“): `sandbox.enableWeakerNetworkIsolation: true` statt `excludedCommands`. Laut settings-reference: „Let sandboxed commands on macOS reach the system TLS trust service, `com.apple.trustd.agent`.“ und „This reduces security by opening a potential data exfiltration path through the trust service.“ Zu `excludedCommands` sagt die Sandbox-Doku: „run matching commands outside the sandbox, which means no filesystem restrictions and no network proxy“ und „An excluded command runs with your full access.“ Ein ausgenommenes `gh …` oder `monarch …` dürfte also auch den Haupt-Checkout schreiben. Die weichere Isolation öffnet nur den Trust-Dienst, Dateisystem und Domain-Liste bleiben. Offen bis zum Owner-Entscheid.
+4. TLS unter Seatbelt (Vorschlag, Beleg unter „Test nach der Aktivierung“): `sandbox.enableWeakerNetworkIsolation: true` statt `excludedCommands`. Laut settings-reference: „Let sandboxed commands on macOS reach the system TLS trust service, `com.apple.trustd.agent`.“ und „This reduces security by opening a potential data exfiltration path through the trust service.“ Zu `excludedCommands` sagt die Sandbox-Doku: „run matching commands outside the sandbox, which means no filesystem restrictions and no network proxy“ und „An excluded command runs with your full access.“ Ein ausgenommenes `gh …` oder `monarch …` dürfte also auch den Haupt-Checkout schreiben. Die weichere Isolation öffnet nur den Trust-Dienst, Dateisystem und Domain-Liste bleiben. Owner-Entscheid vom 26.11.2026, wörtlich: „TLS: enableWeakerNetworkIsolation wie empfohlen, keine excludedCommands.“ Nachtest im Abschnitt „Zweite Runde nach der Aktivierung“.
