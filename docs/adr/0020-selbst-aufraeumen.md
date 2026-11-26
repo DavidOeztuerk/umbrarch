@@ -2,7 +2,7 @@
 
 - Status: Eine frühere Fassung hat der Warden für develop freigegeben (schmale Prüfung des Fixes, approve, PR #163, Kommentar `#issuecomment-7079968810`). Die jetzige Fassung mit dem Bedrohungsmodell vom 25.11.2026 (§1) ist weder vom Warden noch vom Owner freigegeben. Owner-Fragen siehe „Offen“.
 - Datum: 2026-11-22, §1 neu am 2026-11-25
-- Gate: G-0130, Quests Q-0192 bis Q-0207
+- Gate: G-0130, Quests Q-0192 bis Q-0210
 - Bezug: #46, #161, #74, #139, #16, #81, #44, #36, ADR-0003, ADR-0004, ADR-0007, ADR-0008, ADR-0010, ADR-0011, ADR-0012, ADR-0015, ADR-0018, ADR-0019
 - Fassung: Designrunde 1 (`#issuecomment-7078646801`), Delta-Runde (`#issuecomment-7079794677`), Fix und schmale Prüfung (`#issuecomment-7079968810`); §1 danach nach der Schlussrunde (`#issuecomment-7161665432`) und der Delta-Runde zu Q-0200 (`#issuecomment-7167800109`)
 
@@ -22,9 +22,10 @@ Alles Weitere in diesem Dokument ist technisches Design der Session. Wo es über
 ## Zusammenfassung (einfache Sprache)
 
 1. **Haupt-Checkout:** Drei Schichten sollen den Hauptordner eines Projekts mit Monarch schützen. Die ersten beiden hat der Owner am 26.11.2026 aktiviert.
-   - Die Sandbox von Claude Code steht in den User-Settings des Owners und gilt für jede Session. Bash schreibt nur im Arbeitsverzeichnis, im Temp-Ordner, in wenigen freigegebenen Ordnern und, aus einer Worktree, in Teilen von `.git`. HEAD, Index und die losen Refs von develop und main des Hauptordners sind gesperrt; `packed-refs` nicht.
+   - Die Sandbox von Claude Code steht in den User-Settings des Owners und gilt für jede Session. Bash schreibt nur im Arbeitsverzeichnis, im Temp-Ordner, in wenigen freigegebenen Ordnern und, aus einer Worktree, in Teilen von `.git`. HEAD, Index und die losen Refs von develop und main des Hauptordners sind gesperrt. `packed-refs` und `commondir` kommen mit dem Befehl aus der „Dritten Runde“ dazu, sobald der Owner ihn ausführt.
    - Ein git-Hook verweigert in Claude-Code-Sessions jede Änderung an develop und main, im Hauptordner auch an HEAD und dessen Branch. Neue Gate-Branches bleiben möglich.
-   - Der Monarch-Hook verweigert bei Bash weiter, ist dort aber nur Frühwarnung und keine Sicherheitsgrenze. Edit und Write in den Hauptordner verweigert er.
+   - Der Monarch-Hook verweigert bei Bash weiter, ist dort aber nur Frühwarnung und keine Sicherheitsgrenze. Edit und Write in den Hauptordner verweigert er. Ist eine Session im Hauptordner gestartet, verweigert er jeden Bash-Aufruf und jedes Schreibwerkzeug, auch nach `cd` woandershin; Lesen bleibt erlaubt.
+   - Dazu kommen Permission-Regeln in den User-Settings, die Edit und Write auf die Einträge des Hauptordners sperren, unabhängig vom Monarch-Hook (Befehl aus der „Dritten Runde“).
 
    Gearbeitet wird nur in der Gate-Worktree.
 2. **Mana bei Shadows:** Vor dem Start eines Shadows prüft der Hook, ob dessen typische Kosten noch unter die Grenze passen. Die Kosten sind aus den Ledgern gemessen. Erreicht ein laufender Shadow die Grenze, bekommt er keine Werkzeuge mehr und meldet seinen Stand als unvollständig. Ohne frischen Stand (headless) bremst nur der letzte bekannte Wert.
@@ -45,11 +46,19 @@ Nach der Delta-Runde zu Q-0200 (`#issuecomment-7167800109`, vier major) gilt der
 
 Q-0201 und Q-0202 setzen die Schichten 2 und 3 im Repo um. Schicht 1 fügt der Owner in seine User-Settings ein, den git-Hook installiert er selbst (Befehle unten). Am 26.11.2026 hat der Owner beides aktiviert; die Ergebnisse stehen unter „Test nach der Aktivierung“. Die drei Schichten (Zusammenfassung):
 
-1. **Schicht 1, OS-Sandbox:** Claude Code führt die Bash-Befehle jeder Session und ihrer Subagenten in einer Sandbox aus. Schreiben dürfen sie im Arbeitsverzeichnis, im Temp-Ordner, in den Pfaden aus `allowWrite` und, wenn das Arbeitsverzeichnis eine Worktree ist, im gemeinsamen `.git` des Haupt-Checkouts; dort liegen Objekte und Refs der Worktree. Im `.git` des Haupt-Checkouts sperrt `denyWrite` für jede Session `HEAD`, `index`, `ORIG_HEAD`, `FETCH_HEAD` und die losen Refs von develop und main. `packed-refs` bleibt aus einer Worktree schreibbar (Restrisiko unten).
+1. **Schicht 1, OS-Sandbox:** Claude Code führt die Bash-Befehle jeder Session und ihrer Subagenten in einer Sandbox aus. Schreiben dürfen sie im Arbeitsverzeichnis, im Temp-Ordner, in den Pfaden aus `allowWrite` und, wenn das Arbeitsverzeichnis eine Worktree ist, im gemeinsamen `.git` des Haupt-Checkouts; dort liegen Objekte und Refs der Worktree. Im `.git` des Haupt-Checkouts sperrt `denyWrite` für jede Session `HEAD`, `index`, `ORIG_HEAD`, `FETCH_HEAD` und die losen Refs von develop und main. Mit dem Befehl aus der „Dritten Runde“ kommen `packed-refs` und `commondir` dazu (Owner-Entscheide 1 und 2 vom 26.11.2026); bis zur Ausführung ist `packed-refs` aus einer Worktree schreibbar (Warden-Befund 2, `#issuecomment-7185290617`).
 2. **Schicht 2, git-Hook `reference-transaction`:** git ruft ihn vor jeder Ref-Änderung auf. In einer Claude-Code-Session (`CLAUDECODE` nicht leer) verweigert er jede Änderung an `refs/heads/develop` und `refs/heads/main`, im Haupt-Checkout zusätzlich an `HEAD` und an der Branch, auf die dessen HEAD zeigt. Andere Refs sind erlaubt, auch neue Gate-Branches aus dem Haupt-Checkout.
-3. **Schicht 3, PreToolUse-Hook:** Bei Bash Frühwarnung mit einem lesbaren Grund, keine Sicherheitsgrenze. Das cwd-Modell für `cd`, `pushd` und `popd` ist eingefroren. Edit, Write, MultiEdit und NotebookEdit laufen nicht in der Sandbox. Gegen sie steht nur diese Regel, neben den Permission-Regeln von Claude Code (Abschnitt Schicht 3).
+3. **Schicht 3, PreToolUse-Hook:** Bei Bash Frühwarnung mit einem lesbaren Grund, keine Sicherheitsgrenze. Das cwd-Modell für `cd`, `pushd` und `popd` ist eingefroren. Edit, Write, MultiEdit und NotebookEdit laufen nicht in der Sandbox. Gegen sie stehen diese Regel und, nach dem Befehl aus der „Dritten Runde“, Edit-Deny-Regeln in den User-Settings für die 24 Einträge der obersten Ebene (nicht für `.git` und `.claude`). Ist die Startwurzel der Session ein Haupt-Checkout, verweigert die Regel jeden Bash-Aufruf und jedes Datei-Schreibwerkzeug (Option B, Q-0209).
 
 **Restrisiko**, Owner-Entscheid vom 25.11.2026, wörtlich: „Vorsätzliches Umgehen per Skript, das CLAUDECODE entfernt und core.hooksPath umbiegt, kann ein gepacktes develop/main lokal löschen; das Remote schützt die GitHub-Branch-Protection.“
+
+Owner-Entscheid vom 26.11.2026 dazu, wörtlich: „packed-refs (major 2): <main>/.git/packed-refs in denyWrite. Restrisiko im ADR und in plugin/README.md neu formulieren, nicht mehr auf packed-refs ausdehnen.“
+
+Neue Fassung (Vorschlag, Zusammenfassung der Session; gilt, sobald der Befehl aus der „Dritten Runde“ ausgeführt ist):
+- Das Restrisiko vom 25.11.2026 betrifft nur das Skript, das `CLAUDECODE` entfernt und `core.hooksPath` umbiegt. Es deckt nicht das direkte Schreiben von `packed-refs` ohne git. Das sperrt ab dann Schicht 1, ebenso `commondir`.
+- Datei-Werkzeuge (Edit, Write, MultiEdit, NotebookEdit) laufen außerhalb der Sandbox. In `<main>/.git` und `<main>/.claude` sperrt sie keine Permission-Regel (Owner-Entscheid 1), nur Schicht 3. Ohne Plugin oder ohne Hook ist dort keine Sperre.
+- Ohne Plugin oder ohne Hook gibt es auch keine Sperre nach der Startwurzel (Option B). Startet eine Session dann im Haupt-Checkout, darf Bash dort neue Einträge der obersten Ebene anlegen (Warden-Befund 3); Option C und die Edit-Regeln decken nur die heutige Liste.
+- Das Remote schützt die Branch-Protection auf GitHub (Beleg unten).
 
 Beleg zur Branch-Protection, Stand 25.11.2026 (`gh api repos/DavidOeztuerk/umbrarch/branches/develop/protection`, dasselbe für `main`): Beide Branches haben `allow_deletions: false`, `allow_force_pushes: false`, `enforce_admins: true` und Pflicht-Checks. main hat zusätzlich `lock_branch: true`.
 
@@ -251,6 +260,115 @@ Dass Schicht 1 hier nicht greift, ist gefolgert und nicht getestet (Lesart der S
 
 Vorher und nachher: `git rev-parse refs/heads/develop` gibt `dfa56649c346e34229e3d093c524a1c43c089ffa`; `grep -n 'refs/heads/develop$' .git/packed-refs` gibt `2:dfa56649c346e34229e3d093c524a1c43c089ffa refs/heads/develop`; `packed-refs` 5720 Bytes vom 22. Nov.; kein `packed-refs.lock`, kein `refs/heads/develop.lock`. Schicht 2 hat verweigert, wie der Owner es erwartet hat.
 
+### Dritte Runde nach dem Verdict changes (26.11.2026)
+
+Warden-Runde über Q-0201 bis Q-0206 am Head bcf4dcb: changes, drei major (`#issuecomment-7185290617`). Owner-Entscheide vom 26.11.2026, wörtlich:
+
+> 1. commondir (major 1): a+b+c wie empfohlen, als heikle Quest in G-0130, roter Test zuerst. Schicht 3 erkennt den Haupt-Checkout per realpath-Vergleich von git-dir und git-common-dir wie der git-Hook, nicht über das Fehlen von commondir (ProtectMainCheckoutRule.cs:112, HookRunner.cs:532). <main>/.git/commondir kommt in denyWrite. Zusätzlich: Permission-Regeln permissions.deny "Edit(//Users/davidozturk/Projects/umbrarch/<eintrag>/**)" bzw. für Dateien ohne /** für die 24 Einträge aus Option C, damit Edit/Write/MultiEdit/NotebookEdit unabhängig von Schicht 3 gesperrt sind. Belege aus der Doku, ob Edit-Regeln alle Datei-Werkzeuge abdecken und wie sie mit sandbox.denyWrite zusammengeführt werden; KEINE Edit-Regel auf <main>/.git oder <main>/.claude.
+>
+> 2. packed-refs (major 2): <main>/.git/packed-refs in denyWrite. Restrisiko im ADR und in plugin/README.md neu formulieren, nicht mehr auf packed-refs ausdehnen.
+>
+> 3. Session im Haupt-Checkout (major 3): Option B jetzt bauen, aber über CLAUDE_PROJECT_DIR statt SessionStart-Zustand: Ist die Session-Wurzel (realpath von CLAUDE_PROJECT_DIR) ein Haupt-Checkout, verweigert PreToolUse jeden Bash-Aufruf und jedes Datei-Schreibwerkzeug mit dem Grund "Session im Haupt-Checkout gestartet; starte sie in der Gate-Worktree neu". Lesen bleibt erlaubt. Belege aus der Hooks-Doku, dass CLAUDE_PROJECT_DIR die Startwurzel ist und sich bei EnterWorktree/cd nicht ändert. Roter Test zuerst. Option C bleibt zusätzlich; das Restrisiko "ohne Plugin/Hook" benennen.
+>
+> 4. Minors nach #164. Zusätzlich testen: Läuft scripts/test-local.sh ohne allowWrite /private/tmp grün (bis auf die bekannten zwei)? Teste das, indem du TMPDIR-unabhängig prüfst, ob Build und Test-Apps nach /private/tmp schreiben (ohne die Settings zu ändern, z. B. per Beobachtung der Dateien in /private/tmp während eines Laufs). Wenn nichts geschrieben wird: schlag mir vor, den Eintrag zu entfernen.
+
+Umgesetzt:
+- **Q-0208** (Entscheid 1 a und c): `IsMainCheckoutGitDir` in `src/Monarch.Policy/ProtectMainCheckoutRule.cs` vergleicht realpath von git-dir und git-common-dir. Das Briefing nutzt dieselbe Prüfung (`ToolCallPolicy.IsInMainCheckout`, `src/Monarch.Cli/HookRunner.cs`). Rote Tests vorher: 7 in `ProtectMainCheckoutTests` (`commondir` = `.`, `./`, `../.git`, `../.GIT`, absolut über Symlink, leer, Ziel fehlt), 2 in `MainCheckoutHookTests` (Briefing warnt, echter Hook verweigert Write). Ein Ordner namens `commondir` war schon vorher gesperrt.
+- **Q-0209** (Entscheid 3): Option B, `ToolCallPolicy.MainCheckoutSession` und `PolicyContext.SessionRoot` (aus `CLAUDE_PROJECT_DIR`). Rote Tests vorher: 6 in `ProtectMainCheckoutTests` (Bash und die vier Schreibwerkzeuge, Wurzel über Symlink und Unterordner), 2 in `MainCheckoutHookTests` (echter Hook, auch mit cwd außerhalb jedes Projekts). Kein Deny dieser Art ohne `CLAUDE_PROJECT_DIR`, mit einer Worktree oder einem nicht erweckten Repo als Wurzel.
+- `scripts/test-local.sh` danach: Build 0 Warnungen; Domain 97/0, Policy 1462/0, Infrastructure 191/0 (1 übersprungen), Cli 763 mit 1 Fehler, dem bekannten `/bin/ps`-Test.
+
+**Doku-Belege** (gelesen am 26.11.2026, Markdown-Fassungen unter `code.claude.com/docs/en/…`; Zitate wörtlich, Abschnitt in Klammern):
+- Edit-Regeln und Datei-Werkzeuge (permissions): „`Edit` rules apply to all built-in tools that edit files.“ (What `Read` and `Edit` rules cover) und „`Write`, `NotebookEdit`, or legacy `MultiEdit`: use `Edit(docs/**)` in place of `Write(docs/**)`.“ (`Write(path)`, `Glob(path)`, and `Grep(path)` rules don't match).
+- Pfade (permissions, How path patterns match): „Read and Edit rules both use gitignore pattern syntax with four distinct pattern types:“; `//path` heißt „Absolute path from filesystem root“; „Use `//Users/alice/file` for absolute paths.“ Beispiel: „`Edit(//tmp/scratch.txt)`: edits the absolute path `/tmp/scratch.txt`“. Dass eine Regel ohne `/**` genau eine Datei trifft, sagt die Doku nicht ausdrücklich; das zeigt erst Probe h.
+- Zusammenführung mit der Sandbox (sandboxing, How sandboxing relates to permissions and permission modes): „Paths and domains from both sandbox settings and permission rules are merged into the final sandbox configuration.“ Tabelle: „`Read` and `Edit` deny rules | Block access to specific files or directories“ und „`sandbox.filesystem.denyWrite` and `sandbox.filesystem.denyRead` | Block subprocess access to specific paths“. Außerdem: „The sandbox covers shell commands only. Claude's file tools, MCP servers, and hooks run outside it.“ Lesart der Session: Die Edit-Deny-Regeln sperren die Datei-Werkzeuge, und Claude Code nimmt ihre Pfade zusätzlich in die Sandbox auf. Ob sie dort genau wie `denyWrite` wirken, sagt die Doku nicht.
+- Vorrang (permissions, Settings precedence): „If a tool is denied at any level, no other level can allow it.“ und (Manage permissions) „Rules are evaluated in order: deny, then ask, then allow.“ Zum Auto-Modus sagt die Doku an dieser Stelle nichts.
+- Listen aus mehreren Settings (settings, Lists merge instead of overriding): „When you set the same list key, such as `permissions.allow`, in more than one file, Claude Code combines the lists instead of picking one“.
+- `CLAUDE_PROJECT_DIR` (hooks, Reference scripts by path): „`${CLAUDE_PROJECT_DIR}`: the project root where the session started.“ Die Note „Worktrees are different.“: „Claude Code keeps `${CLAUDE_PROJECT_DIR}` where it was“ und „it still points at the project root where the session started“. Zu `cwd`: „the `cwd` field in the hook's input JSON is the worktree root after Claude enters a worktree“ und „and the new directory after Claude runs `cd`.“ Dazu (permissions, Move the session to another directory): „Hooks the move activates still receive `${CLAUDE_PROJECT_DIR}` set to the project root where the session started.“ EnterWorktree nennt die Doku dort nicht namentlich.
+- Subagenten (hooks, Hook locations): „When a subagent calls a tool, tool events such as `PreToolUse` and `PostToolUse` fire the same configured hooks as in the main conversation“.
+
+**Messung zu Entscheid 4** (`/private/tmp`, ohne die Settings zu ändern):
+- Zwei Läufe von `scripts/test-local.sh`. Lauf 1: alle 0,5 s `find /private/tmp -maxdepth 3 -newer <marke>` ohne `/private/tmp/claude*`; Ausgabe nur `/private/tmp` selbst, mtime 09:55:27. Lauf 2: alle 0,05 s neue Namen der obersten Ebene (`ls -A /private/tmp | grep -v '^claude'` gegen den Stand vor dem Lauf); kein neuer Name, mtime danach 10:01:43. In fünf Minuten ohne Lauf (`stat` alle 0,2 s) blieb die mtime gleich.
+- Ursache im Code: `tests/Monarch.Policy.Tests/PathCanonicalizationTests.cs:84` legt mit Absicht `/tmp/monarch-canon-<guid>` an (Test für den Alias `/tmp` ↔ `/private/tmp`, Umgehung 4) und löscht den Ordner gleich wieder. Ob es noch einen zweiten Schreiber gibt, zeigt die Messung nicht.
+- Folge (Vorschlag): Ohne `allowWrite /private/tmp` würde dieser Test scheitern (Lesart der Session, nicht getestet, die Settings blieben unverändert). `scripts/test-local.sh` wäre also nicht mehr grün bis auf die bekannten Grenzen. Den Test aufzuweichen kommt nicht in Frage (Standardregel 4). Der Eintrag bleibt; der Befehl unten ändert `allowWrite` nicht. Die Folge der Freigabe nennt Warden-Befund 5 (Socket-Dateien in `/private/tmp` lassen sich löschen oder ersetzen, nicht anlegen); er steht in #164.
+
+**Befehl für den Owner** (Entscheide 1 und 2, ein Lauf). Er legt zuerst eine Sicherung `~/.claude/settings.json.bak-<datum-zeit>` an. Dann ergänzt er `sandbox.filesystem.denyWrite` um `<main>/.git/commondir` und `<main>/.git/packed-refs` und legt `permissions.deny` an oder ergänzt es um 24 Edit-Regeln (13 Ordner mit `/**`, 11 Dateien ohne). Er bricht ab, ohne etwas zu ändern, wenn die Datei fehlt oder kein gültiges JSON ist. Ebenso, wenn `denyWrite` nicht genau die 30 bekannten Einträge hat, `allowWrite` nicht die vier bekannten oder einer der neuen Einträge schon da ist. Nach dem Schreiben prüft er alle anderen Schlüssel; die Einrückung wird neu gesetzt. Ist die Datei ein Symlink, ändert er das Ziel. Getestet am 26.11.2026 im Scratchpad an einer Nachbildung der Blöcke `permissions` und `sandbox` (die echte Datei zu kopieren verweigerte der Hook, protect_paths). Geprüft: Einfügen, zweiter Lauf mit Abbruch, fehlende Datei, kaputtes JSON, Symlink (Link bleibt, Ziel geändert), `denyWrite` oder `allowWrite` abweichend, Edit-Regel schon da (je Abbruch, Exit 1) und eine vorhandene `deny`-Liste (bleibt, 24 Regeln kommen dazu).
+
+```sh
+python3 -I - "$HOME/.claude/settings.json" <<'PY'
+import json, os, shutil, sys, time
+MAIN = "/Users/davidozturk/Projects/umbrarch"
+DIRS = [".claude-plugin", ".github", ".monarch", "artifacts", "bench", "docs", "e2e", "plugin", "scripts", "src", "TestResults", "tests", "tools"]
+FILES = [".DS_Store", ".editorconfig", ".gitignore", "CLAUDE.md", "Directory.Build.props", "Directory.Packages.props", "global.json", "LICENSE", "monarch.slnx", "nuget.config", "README.md"]
+OLD_DENY = [MAIN + "/.git/" + p for p in ["HEAD", "index", "ORIG_HEAD", "FETCH_HEAD", "refs/heads/develop", "refs/heads/main"]] + [MAIN + "/" + e for e in sorted(DIRS + FILES, key=str.lower)]
+OLD_ALLOW = ["/Users/davidozturk/.nuget/packages", "/Users/davidozturk/.local/share/NuGet/http-cache", "/Users/davidozturk/.dotnet/TelemetryStorageService", "/private/tmp"]
+NEW_DENY_WRITE = [MAIN + "/.git/commondir", MAIN + "/.git/packed-refs"]
+NEW_EDIT = ["Edit(/" + MAIN + "/" + d + "/**)" for d in DIRS] + ["Edit(/" + MAIN + "/" + f + ")" for f in FILES]
+path = os.path.realpath(sys.argv[1])
+if not os.path.isfile(path):
+    sys.exit(f"Abbruch: {path} fehlt, nichts geändert")
+with open(path, encoding="utf-8") as fh:
+    raw = fh.read()
+try:
+    data = json.loads(raw)
+except json.JSONDecodeError as e:
+    sys.exit(f"Abbruch: {path} ist kein gültiges JSON ({e}), nichts geändert")
+if not isinstance(data, dict):
+    sys.exit("Abbruch: oberste Ebene ist kein Objekt, nichts geändert")
+sb = data.get("sandbox")
+fs = sb.get("filesystem") if isinstance(sb, dict) else None
+if not isinstance(fs, dict) or not isinstance(fs.get("denyWrite"), list) or not isinstance(fs.get("allowWrite"), list):
+    sys.exit('Abbruch: "sandbox.filesystem" mit denyWrite und allowWrite fehlt, nichts geändert')
+if sorted(fs["denyWrite"], key=str.lower) != sorted(OLD_DENY, key=str.lower):
+    sys.exit("Abbruch: denyWrite weicht vom erwarteten Stand (30 Einträge) ab, nichts geändert")
+if sorted(fs["allowWrite"]) != sorted(OLD_ALLOW):
+    sys.exit("Abbruch: allowWrite weicht vom erwarteten Stand ab, nichts geändert")
+perms = data.get("permissions", {})
+if not isinstance(perms, dict):
+    sys.exit('Abbruch: "permissions" ist kein Objekt, nichts geändert')
+deny = perms.get("deny", [])
+if not isinstance(deny, list):
+    sys.exit('Abbruch: "permissions.deny" ist keine Liste, nichts geändert')
+dup = [e for e in NEW_EDIT if e in deny] + [e for e in NEW_DENY_WRITE if e in fs["denyWrite"]]
+if dup:
+    sys.exit(f"Abbruch: schon vorhanden: {dup}, nichts geändert")
+backup = f"{path}.bak-{time.strftime('%Y%m%d-%H%M%S')}"
+tmp = f"{path}.tmp-sandbox"
+for p in (backup, tmp):
+    if os.path.exists(p):
+        sys.exit(f"Abbruch: {p} existiert schon, nichts geändert")
+new = json.loads(raw)
+nfs = new["sandbox"]["filesystem"]
+nfs["denyWrite"] = nfs["denyWrite"] + NEW_DENY_WRITE
+new.setdefault("permissions", {})
+new["permissions"]["deny"] = deny + NEW_EDIT
+shutil.copy2(path, backup)
+with open(tmp, "w", encoding="utf-8") as fh:
+    json.dump(new, fh, indent=2, ensure_ascii=False)
+    fh.write("\n")
+with open(tmp, encoding="utf-8") as fh:
+    check = json.load(fh)
+# Prüfung: nur denyWrite und permissions.deny haben sich geändert, und genau um die neuen Einträge.
+def without(d):
+    d = json.loads(json.dumps(d))
+    d["sandbox"]["filesystem"].pop("denyWrite")
+    d.get("permissions", {}).pop("deny", None)
+    if d.get("permissions") == {}: d.pop("permissions")
+    return d
+ok = without(check) == without(data)
+ok = ok and check["sandbox"]["filesystem"]["denyWrite"] == fs["denyWrite"] + NEW_DENY_WRITE
+ok = ok and check["permissions"]["deny"] == deny + NEW_EDIT
+if not ok:
+    sys.exit(f"Abbruch: Prüfung fehlgeschlagen, {path} unverändert, Entwurf liegt in {tmp}")
+os.chmod(tmp, os.stat(path).st_mode & 0o777)
+os.replace(tmp, path)
+print(f"Sicherung: {backup}")
+print(f"denyWrite +{len(NEW_DENY_WRITE)} (jetzt {len(check['sandbox']['filesystem']['denyWrite'])}), permissions.deny +{len(NEW_EDIT)} (jetzt {len(check['permissions']['deny'])})")
+print("Alle anderen Schlüssel unverändert (Werte geprüft, Einrückung neu).")
+PY
+```
+
+**Proben nach der Aktivierung** (Definition des Owners vom 26.11.2026, wörtlich: „f) <main>/.git/commondir anlegen muss scheitern, g) ": >> <main>/.git/packed-refs" muss scheitern, h) Edit-Werkzeug auf <main>/README.md muss verweigert werden, beide Male develop vorher/nachher.“): Ergebnisse folgen nach der Aktivierung.
+
 ### Schicht 2: git-Hook reference-transaction
 
 Owner-Vorgabe vom 25.11.2026, wörtlich:
@@ -324,6 +442,8 @@ Bewertung der Session (Vorschlag):
 
 Owner-Entscheid vom 26.11.2026, wörtlich: „Session im Haupt-Checkout: Option C (denyWrite auf die Liste der obersten Einträge des Haupt-Checkouts, ohne .git und .claude), erst nach einem Test der Pfad-Semantik in dieser Session. B nicht bauen. Ändern der User-Settings mache ich; du gibst mir den Befehl im selben Stil (Sicherung, Abbruch, nur filesystem.denyWrite ergänzen).“ Der Test der Pfad-Semantik steht unter „Test nach der Aktivierung“. Den Befehl legt die Session dem Owner im Bericht vor. Der Rest dieses Abschnitts ist die Vorlage für den Entscheid.
 
+„B nicht bauen“ ersetzt der Owner-Entscheid 3 vom 26.11.2026, wörtlich im Abschnitt „Dritte Runde“. Zusammenfassung: B jetzt bauen, über `CLAUDE_PROJECT_DIR` statt über einen Zustand aus SessionStart; C bleibt zusätzlich. Umgesetzt in Q-0209.
+
 Startet eine Session im Haupt-Checkout, kann Bash dessen Arbeitsbaum schreiben. Das ist die einzige Lage, in der das geht (Schicht 1 oben). Ein SessionStart-Hook kann die Session laut Hooks-Doku nicht sperren; laut Zusammenfassung der Doku hat er „No blocking or decision control“. Ein PreToolUse-Hook kann einen Aufruf mit Grund verweigern (`"permissionDecision": "deny"`, Abschnitt „How a hook resolves“). Optionen:
 - **A. Nur das Briefing** (heute eine Warnung, Q-0201). Vorteil: kein Code. Nachteil: Es ist nur ein Hinweis.
 - **B. Harte Sperre im PreToolUse-Hook nach der Session-Wurzel.** Der SessionStart-Hook merkt sich je `session_id` das Startverzeichnis. Ist das ein Haupt-Checkout, verweigert PreToolUse jeden Bash-Aufruf und jedes Datei-Werkzeug mit dem Grund „Session im Haupt-Checkout gestartet; starte sie in der Gate-Worktree neu“. Erlaubt bleiben höchstens feste, wörtlich gelistete Befehle wie `~/.monarch/bin/monarch status`. Vorteile: kein Shell-Parsing, kein cwd-Modell; `cd` in eine Worktree hebt die Sperre nicht auf, weil die Sandbox den Startordner weiter freigibt. Nachteile: Es ist Schicht 3; ohne Plugin oder Hook gibt es keine Sperre. Fortgesetzte Sessions brauchen den Eintrag erneut (Annahme: SessionStart läuft auch beim Fortsetzen; nicht geprüft). Wer sich in den Haupt-Checkout verirrt, muss die Session neu starten.
@@ -338,7 +458,8 @@ Owner-Vorgabe vom 25.11.2026, wörtlich: „Bash-cwd-Modell einfrieren, keine Ä
 Umsetzung in Q-0201 (`src/Monarch.Policy/ProtectMainCheckoutRule.cs`):
 - **Sperrliste:** Ein Bash-Befehl, dessen Text `hooksPath`, `GIT_CONFIG` oder `CLAUDECODE` enthält (Teilstring, Schreibweise egal), wird verweigert, egal wo das cwd liegt. Der Grund nennt den Weg: Suchen mit dem Grep-Werkzeug, Texte über eine Datei (`git commit -F <datei>`, `gh … --body-file <datei>`).
 - **Datei-Werkzeuge:** Für Edit, Write, MultiEdit und NotebookEdit löst die Regel den Zielpfad über Symlinks auf (`PathResolver.Resolve`; fehlende Teile bleiben, wie sie sind). Dann sucht sie vom Zielordner aufwärts das nächste `.git`. Ist das ein Haupt-Checkout, verweigert sie. Pfade in einer Worktree und außerhalb jedes Repos bleiben erlaubt. Die Datei-Werkzeuge laufen nicht in der Sandbox (Schicht 1). Gegen Schreiben in den Haupt-Checkout per Edit oder Write steht darum nur diese Regel, neben den Permission-Regeln von Claude Code.
-- **SessionStart:** Läuft die Session im Haupt-Checkout, warnt das Briefing (`src/Monarch.Cli/HookRunner.cs`).
+- **SessionStart:** Läuft die Session im Haupt-Checkout, warnt das Briefing (`src/Monarch.Cli/HookRunner.cs`). Seit Q-0208 mit derselben Erkennung wie die Regel (unten, „Was ein Haupt-Checkout ist“).
+- **Startwurzel (Option B, Q-0209):** Ist realpath von `CLAUDE_PROJECT_DIR` ein Haupt-Checkout oder ein Ordner darin, verweigert die Regel Bash, Edit, Write, MultiEdit und NotebookEdit mit dem Grund „Session im Haupt-Checkout gestartet; starte sie in der Gate-Worktree neu“. Read, Grep, Glob und die übrigen Werkzeuge bleiben erlaubt. Das gilt auch, wenn das cwd außerhalb jedes erweckten Projekts liegt; dann schreibt der Hook kein Ledger.
 
 Die folgenden Absätze beschreiben die Regel `protect_main_checkout` für Bash im eingefrorenen Stand nach Q-0200.
 
@@ -361,7 +482,7 @@ Die vier major der Delta-Runde zu Q-0200 (`#issuecomment-7167800109`) schließt 
 
 Lesart der Session (Vorschlag), über den Wortlaut hinaus: `cd +N`/`cd -N` (zsh) ist dieselbe Stapelwahl wie `pushd +N` und zählt mit; `pushd` mit zwei Operanden zählt wie `cd` mit zwei Operanden; „jeden schreibenden git-Befehl“ heißt die acht Befehle dieser Regel, auch mit `git -C <Gate-Worktree>` im selben Bash-Befehl, und die Markierung gilt bis zum Ende des Bash-Befehls, auch nach einer Subshell.
 
-**Was ein Haupt-Checkout ist.** Das gefundene Git-Verzeichnis heißt `.git`, ist ein Verzeichnis und hat keine Datei `commondir`, ist also kein verknüpfter Worktree. Der Ordner darüber enthält ein Verzeichnis `.monarch` (erwecktes Projekt). Für `--work-tree` und `GIT_WORK_TREE`: `BranchGuard.FindGitDir(<Arbeitsbaum>)` und derselbe Test. So zählt auch ein Unterordner des Haupt-Checkouts, etwa `git --work-tree=<Haupt-Checkout>/src checkout -f -- .` aus einer Worktree. Ein Arbeitsbaum ohne Git-Verzeichnis darüber (etwa `/tmp/x`) ergibt keinen Kandidaten. Ein Worktree unter `.claude/worktrees/` hat eine `.git`-Datei. Sein Git-Verzeichnis liegt unter `.git/worktrees/<name>` und zählt nie.
+**Was ein Haupt-Checkout ist** (Stand Q-0208). Das gefundene Git-Verzeichnis heißt `.git` und ist ein Verzeichnis. Der Ordner darüber enthält ein Verzeichnis `.monarch` (erwecktes Projekt). git-dir und git-common-dir sind nach realpath gleich, wie im git-Hook; anders als dort ohne Beachtung der Schreibweise (strenger, `ProtectMainCheckoutRule.cs`, `OrdinalIgnoreCase`). Das git-common-dir steht in der Datei `commondir`, relativ zum git-dir; fehlt sie, ist es das git-dir. Ist `commondir` leer, unlesbar oder zeigt es auf einen Ordner, den es nicht gibt, zählt es als Haupt-Checkout. Bis Q-0208 hieß „Haupt-Checkout“: keine Datei `commondir`. Eine Datei `commondir` mit Ziel `.` schaltete damit die Regel ab (Warden-Befund 1, `#issuecomment-7185290617`). Für `--work-tree` und `GIT_WORK_TREE`: `BranchGuard.FindGitDir(<Arbeitsbaum>)` und derselbe Test. So zählt auch ein Unterordner des Haupt-Checkouts, etwa `git --work-tree=<Haupt-Checkout>/src checkout -f -- .` aus einer Worktree. Ein Arbeitsbaum ohne Git-Verzeichnis darüber (etwa `/tmp/x`) ergibt keinen Kandidaten. Ein Worktree unter `.claude/worktrees/` hat eine `.git`-Datei. Sein Git-Verzeichnis liegt unter `.git/worktrees/<name>` und zählt nie.
 
 **Entscheidung.** Deny mit Regel `protect_main_checkout` und dem Weg: „Der Haupt-Checkout bleibt unverändert (Standardregel 2). Arbeite in der Gate-Worktree. Eine neue legt der Owner im eigenen Terminal an (`git -C <Haupt-Checkout> worktree add --no-track .claude/worktrees/<G> -b monarch/<G>-<slug> origin/develop`) und startet die Session dort.“ (Text nach dem Owner-Entscheid „Gate öffnen“ vom 26.11.2026, Q-0203.) Das gilt für Main und Shadows gleich. Die Regel läuft in `Evaluate` und in `EvaluateProtection`, also auch, wenn der Haupt-Checkout nur Ziel eines Befehls ist, etwa `git -C ~/Projects/Noelia checkout main` aus einer anderen Session.
 
