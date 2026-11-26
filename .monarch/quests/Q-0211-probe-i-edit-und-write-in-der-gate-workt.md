@@ -11,5 +11,6 @@ scope:
   include: ["tmp-probe-i/**"]
   exclude: []
 estimate: { session_pct: 1, weekly_pct: 0.2, gold_usd: 0 }
+board: { pr: 163 }
 ---
 # Probe i: Edit und Write in der Gate-Worktree gehen trotz Edit-Regeln (ohne Repo-Änderung)
