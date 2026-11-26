@@ -2,7 +2,7 @@
 
 - Status: Eine frühere Fassung hat der Warden für develop freigegeben (schmale Prüfung des Fixes, approve, PR #163, Kommentar `#issuecomment-7079968810`). Die jetzige Fassung mit dem Bedrohungsmodell vom 25.11.2026 (§1) ist weder vom Warden noch vom Owner freigegeben. Owner-Fragen siehe „Offen“.
 - Datum: 2026-11-22, §1 neu am 2026-11-25
-- Gate: G-0130, Quests Q-0192 bis Q-0214
+- Gate: G-0130, Quests Q-0192 bis Q-0215
 - Bezug: #46, #161, #74, #139, #16, #81, #44, #36, ADR-0003, ADR-0004, ADR-0007, ADR-0008, ADR-0010, ADR-0011, ADR-0012, ADR-0015, ADR-0018, ADR-0019
 - Fassung: Designrunde 1 (`#issuecomment-7078646801`), Delta-Runde (`#issuecomment-7079794677`), Fix und schmale Prüfung (`#issuecomment-7079968810`); §1 danach nach der Schlussrunde (`#issuecomment-7161665432`) und der Delta-Runde zu Q-0200 (`#issuecomment-7167800109`)
 
@@ -483,7 +483,18 @@ print("Alle anderen Schlüssel unverändert (Werte geprüft, Einrückung neu).")
 PY
 ```
 
-**Proben nach der Aktivierung** (Definition des Owners vom 26.11.2026, wörtlich: „j) Edit-Werkzeug auf <main>/.git/hooks/reference-transaction und auf <main>/.git/config muss von der Permission-Regel verweigert werden (Suchtext, den es nicht gibt); k) mkdir <main>/.git/.git (falls in denyWrite: muss scheitern; sonst danach Edit auf <main>/.git/packed-refs, muss trotzdem verweigert werden); l) Gegenprobe: git commit im Worktree (Ledger-Commit) und git fetch gehen weiter. develop vorher/nachher.“). Ergebnisse folgen nach der Aktivierung.
+**Proben nach der Aktivierung** (Definition des Owners vom 26.11.2026, wörtlich: „j) Edit-Werkzeug auf <main>/.git/hooks/reference-transaction und auf <main>/.git/config muss von der Permission-Regel verweigert werden (Suchtext, den es nicht gibt); k) mkdir <main>/.git/.git (falls in denyWrite: muss scheitern; sonst danach Edit auf <main>/.git/packed-refs, muss trotzdem verweigert werden); l) Gegenprobe: git commit im Worktree (Ledger-Commit) und git fetch gehen weiter. develop vorher/nachher.“). Der Owner hat den Befehl am 26.11.2026 ausgeführt, das Binary neu installiert und die Session neu gestartet (laut Owner). Danach in `~/.claude/settings.json`: 33 Zeilen mit `"/Users/davidozturk/Projects/umbrarch/` in `denyWrite`, 34 mit `Edit(`, `.git/.git` in Zeile 187 (`grep -c`, `grep -n`).
+
+| Probe | Befehl | Ergebnis | Zustand |
+|---|---|---|---|
+| j | Edit-Werkzeug auf `<main>/.git/hooks/reference-transaction` (nach Read; Suchtext, den es nicht gibt) | „File is in a directory that is denied by your permission settings.“ | 2847 Bytes, mtime 1795646866, unverändert |
+| j | dasselbe auf `<main>/.git/config` | „File is in a directory that is denied by your permission settings.“ | 3747 Bytes, mtime 1795650590, unverändert |
+| k | `mkdir <main>/.git/.git` | „mkdir: /Users/davidozturk/Projects/umbrarch/.git/.git: Operation not permitted“, Exit 1 | kein Ordner `.git/.git` |
+| l | Ledger-Commit in der Gate-Worktree (`git add .monarch`, `git commit`), dann `git fetch origin` und Push auf den Gate-Branch | Commit 2834f47, Exit 0; fetch Exit 0; push Exit 0 | – |
+
+Vorher und nachher: `git rev-parse refs/heads/develop` gibt `dfa56649c346e34229e3d093c524a1c43c089ffa`; `grep -n 'refs/heads/develop$' <main>/.git/packed-refs` gibt `2:dfa56649c346e34229e3d093c524a1c43c089ffa refs/heads/develop`; `packed-refs` 5720 Bytes, mtime 1795315409.
+
+Lesart der Session: Bei j hat die Permission-Regel von Claude Code gegriffen (Text von Claude Code, Verweigerung vor der Prüfung des Suchtexts). k scheitert an Schicht 1, darum entfiel der zweite Teil von k (Edit auf `packed-refs` nach `mkdir`).
 
 ### Schicht 2: git-Hook reference-transaction
 
