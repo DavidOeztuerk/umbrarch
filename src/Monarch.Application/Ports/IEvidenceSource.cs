@@ -7,7 +7,9 @@ namespace Monarch.Application.Ports;
 /// <param name="Name">Check run name.</param>
 /// <param name="Conclusion">GitHub conclusion, e.g. <c>success</c>, <c>failure</c>, <c>cancelled</c>; empty while the run is not completed.</param>
 /// <param name="Status">GitHub status: <c>queued</c>, <c>in_progress</c> or <c>completed</c>.</param>
-public sealed record CheckEvidence(Evidence Evidence, string Name, string Conclusion, string Status = "completed")
+/// <param name="SuiteId">Id of the check suite the run belongs to; <see langword="null"/> when the forge does not report one.</param>
+/// <param name="App">Slug of the app that created the check run (e.g. <c>github-actions</c>); <see langword="null"/> when unknown.</param>
+public sealed record CheckEvidence(Evidence Evidence, string Name, string Conclusion, string Status = "completed", long? SuiteId = null, string? App = null)
 {
     /// <summary>Gets a value indicating whether the run has finished (status <c>completed</c>).</summary>
     public bool IsCompleted => Status == "completed";
@@ -32,6 +34,14 @@ public interface IEvidenceSource
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>One item per check run, whatever its status.</returns>
     Task<IReadOnlyList<CheckEvidence>> GetChecksAsync(string owner, string repo, string sha, CancellationToken cancellationToken = default);
+
+    /// <summary>Gets the triggering event (e.g. <c>push</c>, <c>pull_request</c>, <c>schedule</c>) of every workflow run of a commit, keyed by its check suite id.</summary>
+    /// <param name="owner">Repository owner.</param>
+    /// <param name="repo">Repository name.</param>
+    /// <param name="sha">Commit sha.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Event per check suite id; suites without a workflow run (other apps) are absent.</returns>
+    Task<IReadOnlyDictionary<long, string>> GetRunEventsAsync(string owner, string repo, string sha, CancellationToken cancellationToken = default);
 
     /// <summary>Gets the merge evidence of a pull request.</summary>
     /// <param name="owner">Repository owner.</param>

@@ -65,10 +65,26 @@ internal sealed partial class FakeForge : HttpMessageHandler
     /// <summary>Test hook before the normal routing: returns a response to short-circuit, or null. May wait on the token to simulate a hanging forge.</summary>
     public Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage?>>? Intercept { get; set; }
 
+    /// <summary>Workflow runs per commit sha for <c>GET …/actions/runs?head_sha=</c> (ADR-0021 R1); a sha without entry has none.</summary>
+    public Dictionary<string, string> WorkflowRuns { get; } = [];
+
+    /// <summary>When set, <c>GET …/actions/runs</c> fails with this status.</summary>
+    public int WorkflowRunsFailWith { get; set; }
+
     public static string Run(int id, string name, string conclusion, string status = "completed", string? url = null) =>
         $$"""{"id":{{id}},"name":"{{name}}","head_sha":"{{Sha}}","status":"{{status}}","conclusion":{{(conclusion == "" ? "null" : $"\"{conclusion}\"")}},"completed_at":{{(status == "completed" ? "\"2026-10-27T09:05:00Z\"" : "null")}},"html_url":"{{url ?? $"https://github.com/o/r/runs/{id}"}}"}""";
 
-    public void SetChecks(params string[] runs) => Checks[Sha] = $$"""{"total_count":{{runs.Length}},"check_runs":[{{string.Join(",", runs)}}]}""";
+    /// <summary>A completed check run inside check suite <paramref name="suite"/>, finished <paramref name="minute"/> minutes after 09:00.</summary>
+    public static string RunIn(long suite, int id, string name, string conclusion, int minute = 5) =>
+        $$$"""{"id":{{{id}}},"name":"{{{name}}}","head_sha":"{{{Sha}}}","status":"completed","conclusion":"{{{conclusion}}}","completed_at":"2026-10-27T09:{{{minute:D2}}}:00Z","html_url":"https://github.com/o/r/actions/runs/{{{suite}}}/job/{{{id}}}","check_suite":{"id":{{{suite}}}},"app":{"slug":"github-actions"}}""";
+
+    public static string ChecksOf(params string[] runs) => $$"""{"total_count":{{runs.Length}},"check_runs":[{{string.Join(",", runs)}}]}""";
+
+    /// <summary>Workflow runs as GitHub lists them: run id, the id of its check suite and the triggering event.</summary>
+    public static string RunsOf(params (long Suite, string Event)[] runs) =>
+        $$"""{"total_count":{{runs.Length}},"workflow_runs":[{{string.Join(",", runs.Select(r => $$"""{"id":{{r.Suite + 1000}},"check_suite_id":{{r.Suite}},"event":"{{r.Event}}"}"""))}}]}""";
+
+    public void SetChecks(params string[] runs) => Checks[Sha] = ChecksOf(runs);
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
@@ -137,6 +153,18 @@ internal sealed partial class FakeForge : HttpMessageHandler
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
         }
 
+        if (path == "/repos/o/r/actions/runs")
+        {
+            if (WorkflowRunsFailWith != 0)
+            {
+                return new HttpResponseMessage((HttpStatusCode)WorkflowRunsFailWith);
+            }
+
+            var sha = HeadShaQuery().Match(request.RequestUri!.Query) is { Success: true } q ? q.Groups[1].Value : string.Empty;
+            var body = WorkflowRuns.TryGetValue(sha, out var w) ? w : """{"total_count":0,"workflow_runs":[]}""";
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+        }
+
         return await new HttpMessageInvoker(Board).SendAsync(request, cancellationToken);
     }
 
@@ -157,6 +185,9 @@ internal sealed partial class FakeForge : HttpMessageHandler
 
     [GeneratedRegex(@"/repos/o/r/commits/([^/]+)/check-runs$")]
     private static partial Regex ChecksPath();
+
+    [GeneratedRegex(@"[?&]head_sha=([0-9a-zA-Z]+)")]
+    private static partial Regex HeadShaQuery();
 }
 
 internal static class Seed

@@ -154,11 +154,25 @@ internal static class EvidenceCommands
 
     /// <summary>
     /// The one CI rule, shared by <c>quest verify</c> and <c>gate merge</c> (ADR-0007 B2): only conclusion <c>success</c> counts, the latest run per check name
-    /// counts, and <c>evidence.required</c> from system.yaml narrows the set. Pending: checks missing or still running; Refused: a check is not green.
+    /// counts, checks of scheduled workflow runs do not count (ADR-0021 R1), and <c>evidence.required</c> from system.yaml narrows the set.
+    /// Pending: checks missing or still running; Refused: a check is not green.
     /// </summary>
     internal static (StepResult Result, List<CheckEvidence> Relevant) CheckCi(CliEnv env, ProjectPaths paths, ForgeRef forge, string head, CancellationToken cancellationToken = default)
     {
-        var latest = Forge.Evidence(env).GetChecksAsync(forge.Owner, forge.Repo, head, cancellationToken).GetAwaiter().GetResult()
+        var source = Forge.Evidence(env);
+        var checks = source.GetChecksAsync(forge.Owner, forge.Repo, head, cancellationToken).GetAwaiter().GetResult();
+
+        // Read after the checks: a workflow run exists before its check runs, so every suite seen above has its event here.
+        var events = source.GetRunEventsAsync(forge.Owner, forge.Repo, head, cancellationToken).GetAwaiter().GetResult();
+
+        // An Actions check without its workflow run could be a nightly one; neither counting nor dropping it is safe (ADR-0021 §1).
+        var unknown = checks.Where(c => c.App == "github-actions" && (c.SuiteId is not { } s || !events.ContainsKey(s))).ToList();
+        if (unknown.Count > 0)
+        {
+            return (new StepResult(StepKind.Pending, $"workflow run unknown for check(s) on {head[..Math.Min(8, head.Length)]}: {string.Join(", ", unknown.Select(c => $"{c.Name} (suite {c.SuiteId})"))}; verify again later."), []);
+        }
+
+        var latest = checks.Where(c => !(c.SuiteId is { } suite && events.TryGetValue(suite, out var e) && e == "schedule"))
             .GroupBy(c => c.Name).Select(g => g.OrderBy(c => c.IsCompleted ? c.Evidence.At : DateTimeOffset.MaxValue).Last()).OrderBy(c => c.Name, StringComparer.Ordinal).ToList();
         var required = Forge.Required(paths);
         List<CheckEvidence> relevant;
