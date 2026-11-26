@@ -139,8 +139,8 @@ jobs:
         with:
           ref: ${{ github.event_name == 'schedule' && 'develop' || '' }}
           persist-credentials: false
-          # The version check compares against the base branch of the PR (ADR-0021 §3).
-          fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 1 }}
+          # The version check compares against the base branch of the PR (ADR-0021 §3). Strings, because the number 0 is falsy in expressions.
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
       - name: Shell syntax
         run: |
           set -eu

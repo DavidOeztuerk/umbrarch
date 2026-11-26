@@ -3,7 +3,7 @@ id: Q-0218
 gate: G-0131
 kind: main
 rank: A
-state: in_progress
+state: in_review
 dod:
   - "scripts/check-plugin-version.sh <basis>: bei Änderung unter plugin/ muss die Version in plugin.json höher sein als in der Basis (sort -V), und plugin.json, plugin/scripts/monarch und src/Monarch.Cli/McpTools.cs nennen dieselbe Version; sonst Exit 1 mit Text"
   - "plugin/tests/plugin-version-test.sh vorher rot, danach grün: Änderung ohne höhere Version 1; mit höherer Version 0; ohne Änderung 0; niedrigere Version 1; Stellen ungleich 1"
@@ -15,5 +15,6 @@ scope:
   exclude: []
 estimate: { session_pct: 8, weekly_pct: 2, gold_usd: 0 }
 boss: "Ein PR, der plugin/ ändert und die Version nicht erhöht, wird vom Prüfskript rot gemeldet; mit 0.1.3 grün"
+board: { pr: 168 }
 ---
 # Versionspflicht für plugin/ und Version 0.1.3
