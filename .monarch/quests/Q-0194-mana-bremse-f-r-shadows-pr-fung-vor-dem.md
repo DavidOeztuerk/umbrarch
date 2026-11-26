@@ -3,7 +3,7 @@ id: Q-0194
 gate: G-0130
 kind: main
 rank: A
-state: in_review
+state: cleared
 dod:
   - "Voraussetzung: Designrunde von Q-0192 abgeschlossen und Q-0193 fertig (gemeinsame Pfade in src/Monarch.Policy)"
   - "tools/shadow-costs.py liest alle Ledger und gibt je Shadow und Modell n, Median, p90 und Max aus (Filter laut ADR-0020); Test mit Fixture-Ledger"

@@ -3,7 +3,7 @@ id: Q-0197
 gate: G-0130
 kind: main
 rank: A
-state: in_review
+state: cleared
 dod:
   - "Voraussetzung: Designrunde von Q-0192 abgeschlossen, Q-0193 und Q-0196 fertig"
   - "gate merge setzt den Gate-Status in der Gate-Datei auf merged; merged zählt zu den geschlossenen Gate-Zuständen (GateMergeCommands.cs:20), ein zweites gate merge und ein spätes gate verdict weisen das Gate ab, gate check bleibt möglich (Test)"

@@ -3,7 +3,7 @@ id: Q-0193
 gate: G-0130
 kind: main
 rank: A
-state: in_review
+state: cleared
 dod:
   - "Voraussetzung: Designrunde von Q-0192 abgeschlossen"
   - "Roter Test zuerst, im PR belegt: git checkout main und git commit im Haupt-Checkout eines erweckten Projekts werden heute nicht verweigert"

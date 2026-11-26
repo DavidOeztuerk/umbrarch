@@ -67,6 +67,40 @@ public class GitHubChecksEvidenceTests
     }
 
     [Fact]
+    public async Task Check_runs_carry_their_suite_and_workflow_runs_name_the_event_per_suite()
+    {
+        var h = new StubHandler(r => r.RequestUri!.AbsolutePath.EndsWith("/actions/runs", StringComparison.Ordinal)
+            ? Json("""{"total_count":2,"workflow_runs":[{"id":1,"check_suite_id":900,"event":"push"},{"id":2,"check_suite_id":901,"event":"schedule"}]}""")
+            : Json("""{"total_count":3,"check_runs":[{"id":1,"name":"a","status":"completed","conclusion":"success","completed_at":"2026-10-27T09:05:00Z","check_suite":{"id":901},"app":{"slug":"github-actions"}},{"id":2,"name":"b","status":"queued","conclusion":null,"check_suite":{"id":900}},{"id":3,"name":"c","status":"completed","conclusion":"success","completed_at":"2026-10-27T09:05:00Z"}]}"""));
+        var source = Source(h);
+        var checks = await source.GetChecksAsync("o", "r", Sha, TestContext.Current.CancellationToken);
+        Assert.Equal(901, checks[0].SuiteId);
+        Assert.Equal(900, checks[1].SuiteId);
+        Assert.Null(checks[2].SuiteId);
+        Assert.Equal("github-actions", checks[0].App);
+        Assert.Null(checks[2].App);
+        var events = await source.GetRunEventsAsync("o", "r", Sha, TestContext.Current.CancellationToken);
+        Assert.Equal(2, events.Count);
+        Assert.Equal("push", events[900]);
+        Assert.Equal("schedule", events[901]);
+        Assert.Equal($"/repos/o/r/actions/runs?head_sha={Sha}&per_page=100&page=1", h.Uris[1]);
+    }
+
+    [Fact]
+    public async Task Workflow_runs_are_paginated()
+    {
+        string Run(int id) => $$"""{"id":{{id}},"check_suite_id":{{id + 5000}},"event":"push"}""";
+        var h = new StubHandler(r =>
+        {
+            var ids = r.RequestUri!.Query.Contains("page=2", StringComparison.Ordinal) ? [101] : Enumerable.Range(1, 100);
+            return Json($$"""{"total_count":101,"workflow_runs":[{{string.Join(",", ids.Select(Run))}}]}""");
+        });
+        var events = await Source(h).GetRunEventsAsync("o", "r", Sha, TestContext.Current.CancellationToken);
+        Assert.Equal(101, events.Count);
+        Assert.Equal(2, h.Uris.Count);
+    }
+
+    [Fact]
     public async Task Merged_pull_request_yields_merge_commit_evidence()
     {
         var h = new StubHandler(_ => Json("""{"number":7,"merged":true,"merged_at":"2026-10-27T10:00:00Z","merge_commit_sha":"fedcba9876543210fedcba9876543210fedcba98","html_url":"https://github.com/o/r/pull/7"}"""));

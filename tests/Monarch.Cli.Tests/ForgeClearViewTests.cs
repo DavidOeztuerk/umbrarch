@@ -153,7 +153,8 @@ public class ForgeClearViewTests
             Assert.Equal(2, list.Out.Split("cleared (Forge)").Length - 1);
             Assert.Equal(1, f.Paths.Count(x => x == "GET /repos/o/r/pulls/7"));
             Assert.Equal(1, f.Paths.Count(x => x.EndsWith("/check-runs", StringComparison.Ordinal)));
-            Assert.Equal(2, f.Paths.Count);
+            Assert.Equal(1, f.Paths.Count(x => x == "GET /repos/o/r/actions/runs"));
+            Assert.Equal(3, f.Paths.Count);
         }
     }
 

@@ -3,7 +3,7 @@ id: Q-0192
 gate: G-0130
 kind: main
 rank: A
-state: in_review
+state: cleared
 dod:
   - "ADR-0020 in einfacher Sprache deckt alle Teile ab: Haupt-Checkout-Schutz (Befehlsliste, Ausnahmen, Zielermittlung), Shadow-Bremse (Prüfung vor dem Start, Verweigerung im laufenden Shadow, Freshness, Default ohne Messwert), Fall „Reset erfolgt“ mit Obergrenze und Weckzeit, gate move-quest, gate cleanup, Gate-Status merged und Weg des Monarch-Stands gemergter Gates (#139)"
   - "Messung der Kosten je Shadow mit Belegen: Befehl, Ledger-Quellen, Filter (Plan Pro, ohne Überlappung, Snapshot höchstens 2 min vor Start und nach Ende), n, Median, p90 und Max je Shadow und Modell"

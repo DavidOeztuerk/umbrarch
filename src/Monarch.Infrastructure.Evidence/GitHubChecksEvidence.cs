@@ -43,16 +43,38 @@ public sealed class GitHubChecksEvidence : IEvidenceSource
                 {
                     var started = run.StartedAt ?? DateTimeOffset.UnixEpoch;
                     var pending = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"{id}|{head}|{status}")));
-                    result.Add(new CheckEvidence(new DomainEvidence(EvidenceKind.CiRun, source, pending, started), run.Name ?? string.Empty, string.Empty, status == "completed" ? "in_progress" : status));
+                    result.Add(new CheckEvidence(new DomainEvidence(EvidenceKind.CiRun, source, pending, started), run.Name ?? string.Empty, string.Empty, status == "completed" ? "in_progress" : status, run.CheckSuite?.Id, run.App?.Slug));
                     continue;
                 }
 
                 var stamp = completed.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
                 var digest = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"{id}|{head}|{run.Conclusion}|{stamp}")));
-                result.Add(new CheckEvidence(new DomainEvidence(EvidenceKind.CiRun, source, digest, completed), run.Name ?? string.Empty, run.Conclusion));
+                result.Add(new CheckEvidence(new DomainEvidence(EvidenceKind.CiRun, source, digest, completed), run.Name ?? string.Empty, run.Conclusion, SuiteId: run.CheckSuite?.Id, App: run.App?.Slug));
             }
 
             if (batch.CheckRuns.Count < PerPage || seen >= batch.TotalCount)
+            {
+                return result;
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyDictionary<long, string>> GetRunEventsAsync(string owner, string repo, string sha, CancellationToken cancellationToken = default)
+    {
+        var path = $"repos/{Uri.EscapeDataString(owner)}/{Uri.EscapeDataString(repo)}/actions/runs?head_sha={Uri.EscapeDataString(sha)}&per_page={PerPage}";
+        var result = new Dictionary<long, string>();
+        var seen = 0;
+        for (var page = 1; ; page++)
+        {
+            var batch = await _api.GetAsync($"{path}&page={page}", EvidenceJsonContext.Default.WorkflowRunsPage, cancellationToken).ConfigureAwait(false);
+            seen += batch.WorkflowRuns.Count;
+            foreach (var run in batch.WorkflowRuns)
+            {
+                result[run.CheckSuiteId] = run.Event ?? string.Empty;
+            }
+
+            if (batch.WorkflowRuns.Count < PerPage || seen >= batch.TotalCount)
             {
                 return result;
             }

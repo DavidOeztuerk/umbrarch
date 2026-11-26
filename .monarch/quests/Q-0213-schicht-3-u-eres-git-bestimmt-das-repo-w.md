@@ -3,7 +3,7 @@ id: Q-0213
 gate: G-0130
 kind: main
 rank: A
-state: in_review
+state: cleared
 dod:
   - "Owner-Entscheid 2 vom 26.11.2026 (Chat): Ein inneres .git verdeckt kein äußeres (realpath, die oberste .git-Komponente bestimmt das Repo; eine Worktree-Datei .git bleibt die Grenze)"
   - "Minor 2 im selben Fix: Als Worktree zählt nur ein git-dir unter <common>/worktrees/<name>; alles andere zählt als Haupt-Checkout"

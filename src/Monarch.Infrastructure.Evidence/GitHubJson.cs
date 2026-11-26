@@ -19,6 +19,20 @@ internal sealed class CheckRunDto
     public DateTimeOffset? CompletedAt { get; set; }
 
     public string? HtmlUrl { get; set; }
+
+    public CheckSuiteRefDto? CheckSuite { get; set; }
+
+    public CheckAppDto? App { get; set; }
+}
+
+internal sealed class CheckAppDto
+{
+    public string? Slug { get; set; }
+}
+
+internal sealed class CheckSuiteRefDto
+{
+    public long Id { get; set; }
 }
 
 internal sealed class CheckRunsPage
@@ -26,6 +40,22 @@ internal sealed class CheckRunsPage
     public int TotalCount { get; set; }
 
     public List<CheckRunDto> CheckRuns { get; set; } = [];
+}
+
+internal sealed class WorkflowRunDto
+{
+    public long Id { get; set; }
+
+    public long CheckSuiteId { get; set; }
+
+    public string? Event { get; set; }
+}
+
+internal sealed class WorkflowRunsPage
+{
+    public int TotalCount { get; set; }
+
+    public List<WorkflowRunDto> WorkflowRuns { get; set; } = [];
 }
 
 internal sealed class PullDto
@@ -124,6 +154,7 @@ internal sealed class GitRefObjectDto
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
 [JsonSerializable(typeof(CheckRunsPage))]
+[JsonSerializable(typeof(WorkflowRunsPage))]
 [JsonSerializable(typeof(PullDto))]
 [JsonSerializable(typeof(CommitDto))]
 [JsonSerializable(typeof(CompareDto))]

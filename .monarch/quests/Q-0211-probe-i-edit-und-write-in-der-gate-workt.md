@@ -3,7 +3,7 @@ id: Q-0211
 gate: G-0130
 kind: side
 rank: A
-state: in_review
+state: cleared
 dod:
   - "Owner-Probe i vom 26.11.2026: Edit und Write auf eine neue Datei in der Gate-Worktree gehen, ebenso ein Knight-Probelauf mit Write im eigenen Arbeitsverzeichnis"
   - "Probe-Dateien danach entfernt, keine Repo-Änderung außer .monarch"

@@ -3,7 +3,7 @@ id: Q-0196
 gate: G-0130
 kind: main
 rank: C
-state: in_review
+state: cleared
 dod:
   - "Voraussetzung: Designrunde von Q-0192 abgeschlossen und Q-0195 fertig (McpTools.cs gemeinsam)"
   - "monarch gate move-quest <Q> --to <G> ändert in einem Schritt alte Gate-Datei (Quest entfernt), neue Gate-Datei (Quest ergänzt) und Quest-Datei (gate: G) und schreibt QuestMoved ins Ledger"

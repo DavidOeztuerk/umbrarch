@@ -3,7 +3,7 @@ id: Q-0201
 gate: G-0130
 kind: main
 rank: A
-state: in_review
+state: cleared
 dod:
   - "Owner-Entscheid vom 25.11.2026 (Chat): Der Haupt-Checkout wird auf OS- und git-Ebene geschützt; der PreToolUse-Hook für Bash ist nur noch Frühwarnung und keine Sicherheitsgrenze"
   - "Schicht 1: .claude/settings.json mit sandbox.enabled, failIfUnavailable true, allowUnsandboxedCommands false, filesystem.denyWrite für HEAD, index, ORIG_HEAD, FETCH_HEAD, refs/heads/develop, refs/heads/main des Haupt-Checkouts, network.allowedDomains nur so viel wie nötig, excludedCommands nur begründet; verweigert der Hook das Schreiben (protect_paths), legt der Owner die Datei an"

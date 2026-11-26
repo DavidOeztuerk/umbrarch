@@ -3,7 +3,7 @@ id: Q-0210
 gate: G-0130
 kind: side
 rank: A
-state: in_review
+state: cleared
 dod:
   - "Owner-Entscheid 2 vom 26.11.2026: Restrisiko im ADR und in plugin/README.md neu formuliert, nicht mehr auf packed-refs ausgedehnt; packed-refs und commondir in denyWrite"
   - "Doku-Belege wörtlich: Edit-Regeln decken alle Datei-Werkzeuge ab, Zusammenführung mit der Sandbox, CLAUDE_PROJECT_DIR bleibt die Startwurzel"
