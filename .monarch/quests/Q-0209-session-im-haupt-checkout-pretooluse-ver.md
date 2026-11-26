@@ -12,5 +12,6 @@ scope:
   include: ["src/Monarch.Policy/ProtectMainCheckoutRule.cs", "src/Monarch.Policy/ToolCallTypes.cs", "src/Monarch.Cli/HookRunner.cs", "tests/Monarch.Policy.Tests/**", "tests/Monarch.Cli.Tests/**"]
   exclude: []
 estimate: { session_pct: 8, weekly_pct: 1.6, gold_usd: 0 }
+board: { pr: 163 }
 ---
 # Session im Haupt-Checkout: PreToolUse verweigert Bash und Datei-Schreibwerkzeuge (Option B über CLAUDE_PROJECT_DIR)

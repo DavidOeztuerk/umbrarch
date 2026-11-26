@@ -13,5 +13,6 @@ scope:
   include: ["docs/adr/0020-selbst-aufraeumen.md", "plugin/README.md"]
   exclude: []
 estimate: { session_pct: 6, weekly_pct: 1.2, gold_usd: 0 }
+board: { pr: 163 }
 ---
 # ADR-0020 §1: Restrisiko neu, Edit-Regeln, Option B, /private/tmp gemessen, Settings-Befehl
