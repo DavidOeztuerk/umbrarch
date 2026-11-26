@@ -12,5 +12,6 @@ scope:
   include: ["docs/adr/0020-selbst-aufraeumen.md"]
   exclude: []
 estimate: { session_pct: 1, weekly_pct: 0.2, gold_usd: 0 }
+board: { pr: 163 }
 ---
 # ADR-0020 §1: Probe a4 korrigiert, Probe e für Schicht 2 allein
