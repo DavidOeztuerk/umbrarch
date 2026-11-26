@@ -543,7 +543,7 @@ internal static class Briefing
         // Q-0208: dieselbe Erkennung wie protect_main_checkout (realpath von git-dir und git-common-dir), nicht das Fehlen von commondir.
         if (ToolCallPolicy.IsInMainCheckout(paths.Root))
         {
-            sb.AppendLine("Warnung: Diese Session läuft im Haupt-Checkout. Die Sandbox gibt hier den ganzen Haupt-Checkout zum Schreiben frei (ADR-0020 §1). Arbeite in der Gate-Worktree.");
+            sb.AppendLine("Warnung: Diese Session läuft im Haupt-Checkout. Bash und alle Datei-Schreibwerkzeuge sind hier gesperrt (ADR-0020 §1, Option B). Starte die Session in der Gate-Worktree neu.");
         }
 
         if (active is not null)

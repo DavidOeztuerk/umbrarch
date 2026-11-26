@@ -18,14 +18,14 @@ public static partial class ToolCallPolicy
 
     private const string FileToolReason = "Der Haupt-Checkout bleibt unverändert (Standardregel 2). Ändere die Datei in der Gate-Worktree.";
 
-    /// <summary>Zielpfad per realpath auflösen (fehlende Komponenten bleiben lexikalisch), dann vom Zielverzeichnis aufwärts das nächste <c>.git</c> suchen.</summary>
+    /// <summary>Zielpfad per realpath auflösen (fehlende Komponenten bleiben lexikalisch), dann das Repo des Zielverzeichnisses bestimmen (<see cref="IsInMainCheckout"/>).</summary>
     private static bool FileToolTargetsMainCheckout(ToolCall call, PolicyContext ctx)
     {
         if (string.IsNullOrEmpty(call.FilePath)) return false;
         var rs = new PathResolver(ctx.ProjectRoot, call.Cwd);
         var abs = rs.Resolve(PathResolver.ExpandTilde(call.FilePath), rs.Cwd);
         var dir = Path.GetDirectoryName(abs);
-        return dir is not null && IsMainCheckoutGitDir(BranchGuard.FindGitDir(dir));
+        return dir is not null && IsInMainCheckout(dir);
     }
 
     /// <summary>Option B (ADR-0020 §1, Q-0209): Deny, wenn die Startwurzel der Session ein Haupt-Checkout ist und das Werkzeug schreiben kann.</summary>
@@ -103,7 +103,7 @@ public static partial class ToolCallPolicy
         }
 
         foreach (var b in bases)
-            if (IsMainCheckoutGitDir(BranchGuard.FindGitDir(b))) return true;
+            if (IsInMainCheckout(b)) return true;
         foreach (var dir in gitDirs)
             foreach (var b in bases)
                 foreach (var abs in paths.AbsFrom(dir, b))
@@ -111,57 +111,97 @@ public static partial class ToolCallPolicy
         foreach (var wt in workTrees)
             foreach (var b in bases)
                 foreach (var abs in paths.AbsFrom(wt, b))
-                    if (IsMainCheckoutGitDir(BranchGuard.FindGitDir(abs))) return true;
+                    if (IsInMainCheckout(abs)) return true;
         return false;
     }
 
-    /// <summary>Ist <paramref name="dir"/> (oder ein Ordner darüber) der Haupt-Checkout eines erweckten Projekts? Für das Briefing (HookRunner).</summary>
-    public static bool IsInMainCheckout(string dir) => IsMainCheckoutGitDir(BranchGuard.FindGitDir(dir));
-
     /// <summary>
-    /// Haupt-Checkout (ADR-0020 §1, Q-0208): <c>.git</c> ist ein Verzeichnis, der Ordner darüber hat ein Verzeichnis <c>.monarch</c>, und
-    /// git-dir und git-common-dir sind nach realpath gleich, wie im git-Hook (<c>plugin/git-hooks/reference-transaction</c>). Das
-    /// git-common-dir steht in <c>commondir</c> (relativ zum git-dir); fehlt die Datei, ist es das git-dir. Unklar (leer, unlesbar, Ziel fehlt)
-    /// zählt als Haupt-Checkout.
+    /// Liegt <paramref name="dir"/> im Haupt-Checkout eines erweckten Projekts (ADR-0020 §1, Q-0213)? Nach realpath gilt:
+    /// (1) Die oberste Pfad-Komponente <c>.git</c>, die ein Ordner ist, bestimmt das Repo; ein inneres <c>.git</c> verdeckt kein äußeres.
+    /// (2) Sonst vom Ordner aufwärts: ein Ordner <c>.git</c> bestimmt das Repo; eine Datei <c>.git</c> ist nur dann die Grenze, wenn sie auf
+    /// das git-dir einer echten Worktree zeigt (<see cref="IsLinkedWorktreeGitDir"/>); sonst geht die Suche weiter nach oben.
+    /// Haupt-Checkout heißt: der Ordner über dem <c>.git</c> hat <c>.monarch</c>, und das <c>.git</c> ist kein git-dir einer echten Worktree.
+    /// Auch für das Briefing (HookRunner) und Option B.
     /// </summary>
-    private static bool IsMainCheckoutGitDir(string? gitDir)
+    public static bool IsInMainCheckout(string dir)
     {
-        if (gitDir is null) return false;
-        var d = gitDir.TrimEnd('/');
         try
         {
-            // Ohne Beachtung der Schreibweise: auf macOS nimmt Git auch ".GIT" an.
-            if (!string.Equals(Path.GetFileName(d), ".git", StringComparison.OrdinalIgnoreCase) || !Directory.Exists(d)) return false;
-            var parent = Path.GetDirectoryName(d);
-            if (parent is null || !Directory.Exists(Path.Combine(parent, ".monarch"))) return false;
+            var real = new PathResolver("/", "/").Resolve(dir, "/");
+            var cur = string.Empty;
+            foreach (var part in real.Split('/', StringSplitOptions.RemoveEmptyEntries))
+            {
+                cur += "/" + part;
+                // Ohne Beachtung der Schreibweise: auf macOS nimmt Git auch ".GIT" an.
+                if (part.Equals(".git", StringComparison.OrdinalIgnoreCase) && Directory.Exists(cur)) return IsMainRepo(cur);
+            }
+
+            for (var d = real; !string.IsNullOrEmpty(d); d = Path.GetDirectoryName(d))
+            {
+                var dotGit = Path.Combine(d, ".git");
+                if (Directory.Exists(dotGit)) return IsMainRepo(dotGit);
+                if (File.Exists(dotGit) && GitFileTarget(dotGit, d) is { } target && IsLinkedWorktreeGitDir(target)) return false;
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
             return false;
         }
 
-        return CommonDirEqualsGitDir(d);
+        return false;
     }
 
-    /// <summary>realpath(git-common-dir) == realpath(git-dir); jede Unklarheit gibt true (fail closed).</summary>
-    private static bool CommonDirEqualsGitDir(string gitDir)
+    /// <summary>Ausdrückliches git-dir (<c>--git-dir</c>, <c>GIT_DIR</c>): Haupt-Checkout, wenn es nach realpath ein Ordner <c>.git</c> ist (<see cref="IsMainRepo"/>).</summary>
+    private static bool IsMainCheckoutGitDir(string? gitDir)
     {
+        if (gitDir is null) return false;
         try
         {
-            var file = Path.Combine(gitDir, "commondir");
-            // Ohne Datei ist git-common-dir das git-dir; ein Ordner namens commondir ist unklar. Beides zählt als Haupt-Checkout.
-            if (!File.Exists(file)) return true;
-            var line = File.ReadLines(file).FirstOrDefault()?.Trim();
-            if (string.IsNullOrEmpty(line)) return true;
-            var rs = new PathResolver("/", "/");
-            var real = rs.Resolve(gitDir, "/");
-            var common = rs.Resolve(line, real);
-            if (!Directory.Exists(common)) return true;
-            return string.Equals(real.TrimEnd('/'), common.TrimEnd('/'), StringComparison.OrdinalIgnoreCase);
+            var d = new PathResolver("/", "/").Resolve(gitDir, "/").TrimEnd('/');
+            return string.Equals(Path.GetFileName(d), ".git", StringComparison.OrdinalIgnoreCase) && Directory.Exists(d) && IsMainRepo(d);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
-            return true;
+            return false;
         }
+    }
+
+    /// <summary>Ordner <c>.git</c> (realpath): Haupt-Checkout, wenn der Ordner darüber <c>.monarch</c> hat und es kein git-dir einer echten Worktree ist.</summary>
+    private static bool IsMainRepo(string dotGitDir)
+    {
+        var parent = Path.GetDirectoryName(dotGitDir.TrimEnd('/'));
+        return parent is not null && Directory.Exists(Path.Combine(parent, ".monarch")) && !IsLinkedWorktreeGitDir(dotGitDir);
+    }
+
+    /// <summary>
+    /// git-dir einer echten Worktree (Q-0213, Minor 2): <c>commondir</c> ist lesbar, das git-common-dir existiert, und das git-dir liegt nach
+    /// realpath direkt in <c>&lt;common&gt;/worktrees/</c>. Alles andere, auch jede Unklarheit, ist keine Worktree (fail closed).
+    /// </summary>
+    private static bool IsLinkedWorktreeGitDir(string gitDir)
+    {
+        try
+        {
+            var rs = new PathResolver("/", "/");
+            var real = rs.Resolve(gitDir, "/").TrimEnd('/');
+            var file = Path.Combine(real, "commondir");
+            if (!File.Exists(file)) return false;
+            var line = File.ReadLines(file).FirstOrDefault()?.Trim();
+            if (string.IsNullOrEmpty(line)) return false;
+            var common = rs.Resolve(line, real).TrimEnd('/');
+            if (!Directory.Exists(common)) return false;
+            return string.Equals(Path.GetDirectoryName(real), common + "/worktrees", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Ziel der Zeile <c>gitdir:</c> einer Datei <c>.git</c>, relativ zu ihrem Ordner; null ohne solche Zeile.</summary>
+    private static string? GitFileTarget(string dotGitFile, string dir)
+    {
+        foreach (var line in File.ReadLines(dotGitFile))
+            if (line.StartsWith("gitdir:", StringComparison.Ordinal)) return Path.GetFullPath(line["gitdir:".Length..].Trim(), dir);
+        return null;
     }
 }

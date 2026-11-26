@@ -523,6 +523,77 @@ public sealed class ProtectMainCheckoutTests : IDisposable
         Assert.NotEqual(PolicyRules.ProtectMainCheckout, RunFile("Write", Path.Combine(_wt, "src", "a.cs"), _wt).Rule);
     }
 
+    /// <summary>Q-0213: Ein inneres .git (Ordner) im .git des Haupt-Checkouts verdeckt das äußere nicht (Warden #issuecomment-7189024655, major 1).</summary>
+    [Theory]
+    [InlineData("packed-refs")]
+    [InlineData("config")]
+    [InlineData("hooks/reference-transaction")]
+    [InlineData("commondir")]
+    [InlineData(".git/x")]
+    public void Inner_git_dir_inside_the_main_git_dir_does_not_hide_it(string target)
+    {
+        Directory.CreateDirectory(Path.Combine(_main, ".git", ".git"));
+        DenyFile("Write", Path.Combine(_main, ".git", target), _wt);
+        DenyFile("Edit", Path.Combine(_main, ".git", target), _wt);
+    }
+
+    [Fact]
+    public void Inner_git_dir_that_looks_like_a_repo_does_not_hide_the_main_git_dir()
+    {
+        var inner = Path.Combine(_main, ".git", ".GIT");
+        Directory.CreateDirectory(Path.Combine(inner, "objects"));
+        File.WriteAllText(Path.Combine(inner, "HEAD"), "ref: refs/heads/x\n");
+        DenyFile("Write", Path.Combine(_main, ".git", "packed-refs"), _wt);
+        Deny($"git --git-dir={_main}/.git commit -m x", _wt);
+    }
+
+    /// <summary>Eine .git-Datei, die auf keine echte Worktree zeigt, ist keine Grenze: das äußere .git bestimmt das Repo.</summary>
+    [Fact]
+    public void Planted_git_file_inside_the_main_checkout_does_not_hide_it()
+    {
+        var foreign = Path.Combine(_tmp, "foreign-git");
+        Directory.CreateDirectory(foreign);
+        File.WriteAllText(Path.Combine(_main, "src", ".git"), "gitdir: " + foreign + "\n");
+        DenyFile("Write", Path.Combine(_main, "src", "a.cs"), _wt);
+        Deny("git checkout main", Path.Combine(_main, "src"));
+    }
+
+    /// <summary>Q-0213 (Minor 2): Worktree nur, wenn das git-dir nach realpath direkt unter &lt;common&gt;/worktrees/ liegt.</summary>
+    [Theory]
+    [InlineData("hooks")]
+    [InlineData("..")]
+    [InlineData("../src")]
+    public void Commondir_pointing_at_another_existing_dir_keeps_the_main_checkout(string commondir)
+    {
+        Directory.CreateDirectory(Path.Combine(_main, ".git", "hooks"));
+        File.WriteAllText(Path.Combine(_main, ".git", "commondir"), commondir + "\n");
+        Deny("git checkout main", _main);
+        DenyFile("Write", Path.Combine(_main, "neu.txt"), _wt);
+        Assert.NotNull(ToolCallPolicy.MainCheckoutSession("Bash", _main));
+    }
+
+    [Fact]
+    public void Worktree_file_with_a_git_dir_outside_common_worktrees_is_not_a_worktree()
+    {
+        var fakeGit = Path.Combine(_tmp, "fake-wt-git");
+        Directory.CreateDirectory(fakeGit);
+        File.WriteAllText(Path.Combine(fakeGit, "commondir"), Path.Combine(_main, ".git") + "\n");
+        var fake = Path.Combine(_main, ".claude", "worktrees", "G-2");
+        Directory.CreateDirectory(fake);
+        File.WriteAllText(Path.Combine(fake, ".git"), "gitdir: " + fakeGit + "\n");
+        DenyFile("Write", Path.Combine(fake, "a.cs"), fake);
+        Assert.NotNull(ToolCallPolicy.MainCheckoutSession("Bash", fake));
+    }
+
+    [Fact]
+    public void Real_worktree_stays_allowed_with_an_inner_git_dir_in_the_main_git_dir()
+    {
+        Directory.CreateDirectory(Path.Combine(_main, ".git", ".git"));
+        Allow("git commit -m x", _wt);
+        Assert.NotEqual(PolicyRules.ProtectMainCheckout, RunFile("Write", Path.Combine(_wt, "src", "a.cs"), _wt).Rule);
+        Assert.Null(ToolCallPolicy.MainCheckoutSession("Bash", _wt));
+    }
+
     private const string SessionReason = "Session im Haupt-Checkout gestartet; starte sie in der Gate-Worktree neu";
 
     private PolicyDecision RunInSession(string? sessionRoot, ToolCall call) =>

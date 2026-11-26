@@ -5,7 +5,7 @@ namespace Monarch.Cli.Tests;
 /// <summary>ADR-0020 §1: SessionStart-Warnung im Haupt-Checkout (Schicht 3) und Datei-Tools über Symlinks im echten Hook.</summary>
 public class MainCheckoutHookTests
 {
-    private const string Warning = "Warnung: Diese Session läuft im Haupt-Checkout. Die Sandbox gibt hier den ganzen Haupt-Checkout zum Schreiben frei (ADR-0020 §1). Arbeite in der Gate-Worktree.";
+    private const string Warning = "Warnung: Diese Session läuft im Haupt-Checkout. Bash und alle Datei-Schreibwerkzeuge sind hier gesperrt (ADR-0020 §1, Option B). Starte die Session in der Gate-Worktree neu.";
 
     private static string Briefing(TempProject p)
     {
@@ -31,13 +31,26 @@ public class MainCheckoutHookTests
         Assert.DoesNotContain("Warnung", Briefing(p), StringComparison.Ordinal);
     }
 
+    /// <summary>Q-0213 (Owner-Entscheid 2, Minor 2): Ein .git-Ordner mit commondir ist nur dann eine Worktree, wenn er unter &lt;common&gt;/worktrees/ liegt.
+    /// Bis Q-0212 hieß dieser Test ..._does_not_warn; das war die Lücke aus Minor 2.</summary>
     [Fact]
-    public void Session_start_with_a_git_dir_that_has_commondir_does_not_warn()
+    public void Session_start_with_a_git_dir_whose_commondir_points_elsewhere_warns()
     {
         using var p = new TempProject(activeRank: "A");
         Directory.CreateDirectory(Path.Combine(p.Root, ".git"));
         File.WriteAllText(Path.Combine(p.Root, ".git", "commondir"), "../..\n");
-        Assert.DoesNotContain("Warnung", Briefing(p), StringComparison.Ordinal);
+        Assert.Contains(Warning, Briefing(p), StringComparison.Ordinal);
+    }
+
+    /// <summary>Q-0213: Der echte Hook verweigert Write auf .git/packed-refs auch mit einem inneren .git-Ordner.</summary>
+    [Fact]
+    public void Write_into_the_main_git_dir_with_an_inner_git_dir_is_denied_by_the_hook()
+    {
+        using var p = new TempProject(activeRank: "A");
+        Directory.CreateDirectory(Path.Combine(p.Root, ".git", ".git"));
+        var r = p.Hook("pre-tool-use", TempProject.PreToolUse("Write", file: Path.Combine(p.Root, ".git", "packed-refs")));
+        Assert.Contains("\"deny\"", r.Out, StringComparison.Ordinal);
+        Assert.Contains("protect_main_checkout", string.Join('\n', p.Events().Select(e => e.Payload.ToString())), StringComparison.Ordinal);
     }
 
     /// <summary>Q-0208: commondir mit Ziel auf das eigene .git (git-dir == git-common-dir) ist weiter der Haupt-Checkout.</summary>
