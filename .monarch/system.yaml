@@ -27,3 +27,5 @@ policy:
   read_only_shadows: ["warden", "scout"]
 recap:
   path: .monarch/recap/
+evidence:
+  required: ["build-test (ubuntu-latest)", "plugin", "aot (linux-x64)"]

@@ -3,7 +3,7 @@ id: Q-0212
 gate: G-0130
 kind: side
 rank: A
-state: in_review
+state: cleared
 dod:
   - "Proben f bis i vom 26.11.2026 mit wörtlicher Ausgabe, Exit und develop vorher/nachher im Abschnitt „Dritte Runde“"
   - "Bei h die Ebene benannt, die gegriffen hat"

@@ -3,7 +3,7 @@ id: Q-0203
 gate: G-0130
 kind: main
 rank: A
-state: in_review
+state: cleared
 dod:
   - "Owner-Entscheid 1 vom 26.11.2026 (Chat): ADR-0020 §1 ohne allowUnixSockets /private/tmp, Settings-Block und python3-Befehl angepasst, Begründung ersetzt"
   - "Owner-Entscheid 3: Standardregel 2 in plugin/skills/regeln/SKILL.md und Deny-Text in ProtectMainCheckoutRule.cs nennen den Owner-Befehl im eigenen Terminal (git -C ~/Projects/umbrarch worktree add --no-track .claude/worktrees/<G> -b monarch/<G>-<slug> origin/develop) und den Start der Session dort; monarch gate open später als eigenes Issue"

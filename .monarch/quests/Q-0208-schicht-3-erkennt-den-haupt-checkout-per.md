@@ -3,7 +3,7 @@ id: Q-0208
 gate: G-0130
 kind: main
 rank: A
-state: in_review
+state: cleared
 dod:
   - "Owner-Entscheid 1 vom 26.11.2026 (Chat): Schicht 3 erkennt den Haupt-Checkout per realpath-Vergleich von git-dir und git-common-dir wie der git-Hook, nicht über das Fehlen von commondir (ProtectMainCheckoutRule.cs:112, HookRunner.cs:532)"
   - "Unklar (commondir unlesbar, leer oder Ziel fehlt) gilt als Haupt-Checkout (wie deny im git-Hook)"

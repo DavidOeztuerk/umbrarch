@@ -3,7 +3,7 @@ id: Q-0207
 gate: G-0130
 kind: side
 rank: A
-state: in_review
+state: cleared
 dod:
   - "Owner-Entscheid 1 vom 26.11.2026 (Chat): Probe a4 in der Definition auf ../.. korrigiert (a4b wird a4), im ADR vermerkt"
   - "Probe e (git update-ref -d refs/heads/develop <sha> aus der Gate-Worktree) mit wörtlicher Ausgabe, Exit und Zustand vorher/nachher in ADR-0020 §1"

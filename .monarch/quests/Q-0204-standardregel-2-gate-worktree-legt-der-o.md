@@ -3,7 +3,7 @@ id: Q-0204
 gate: G-0130
 kind: main
 rank: A
-state: in_review
+state: cleared
 dod:
   - "Owner-Entscheid 3 vom 26.11.2026 (Chat): Standardregel 2 in plugin/skills/regeln/SKILL.md nennt den Owner-Befehl im eigenen Terminal (git -C ~/Projects/umbrarch worktree add --no-track .claude/worktrees/<G> -b monarch/<G>-<slug> origin/develop) und den Start der Session dort, statt git worktree add plus EnterWorktree durch die Session"
   - "Checkliste 'Reihenfolge je Gate' Schritt 1 entsprechend; gate carry bleibt direkt nach dem Start"

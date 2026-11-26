@@ -3,7 +3,7 @@ id: Q-0198
 gate: G-0130
 kind: main
 rank: C
-state: in_review
+state: cleared
 dod:
   - "Voraussetzung: Q-0193 bis Q-0197 fertig (Skills beschreiben den gebauten Stand)"
   - "Regeln-Skill (plugin/skills/regeln/SKILL.md): Kommentar-Regel (keine Historie im Code), Warden-Ablauf (höchstens eine Delta-Runde; „gilt als freigegeben“ ersetzt kein Approve), nie --force vorschlagen"
