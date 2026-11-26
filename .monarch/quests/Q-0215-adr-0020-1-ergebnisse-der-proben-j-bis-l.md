@@ -3,7 +3,7 @@ id: Q-0215
 gate: G-0130
 kind: side
 rank: A
-state: in_review
+state: cleared
 dod:
   - "Proben j bis l vom 26.11.2026 mit wörtlicher Ausgabe, Exit und develop vorher/nachher im Abschnitt „Vierte Runde“"
 scope:

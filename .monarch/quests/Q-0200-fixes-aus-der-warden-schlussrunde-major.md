@@ -3,7 +3,7 @@ id: Q-0200
 gate: G-0130
 kind: main
 rank: A
-state: in_review
+state: cleared
 dod:
   - "Owner-Entscheide vom 25.11.2026 (Chat) zu den drei major der Schlussrunde (#issuecomment-7161665432); je Fall Test rot zuerst, Namen im PR"
   - "Grundsatz des Owners: unklar heißt nicht erlaubt, ohne jede Schreibweise einzeln nachzubauen"

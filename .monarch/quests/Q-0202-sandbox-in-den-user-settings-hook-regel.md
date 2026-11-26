@@ -3,7 +3,7 @@ id: Q-0202
 gate: G-0130
 kind: main
 rank: A
-state: in_review
+state: cleared
 dod:
   - "Owner-Entscheid vom 25.11.2026 (Chat, nach dem Bericht zu Q-0201): Schicht 1 kommt in die User-Settings ~/.claude/settings.json mit absoluten Pfaden, nicht ins Repo; der Owner fügt sie selbst ein"
   - "Hook: mit CLAUDECODE nicht leer immer refs/heads/develop und refs/heads/main verweigern (Schreibweise egal); im Haupt-Checkout (git-dir == git-common-dir) zusätzlich HEAD und die Branch, auf die HEAD des Haupt-Checkouts zeigt; andere neue oder geänderte Refs erlaubt, auch aus dem Haupt-Checkout"

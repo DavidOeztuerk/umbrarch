@@ -3,7 +3,7 @@ id: Q-0199
 gate: G-0130
 kind: main
 rank: A
-state: in_review
+state: cleared
 dod:
   - "Spezifikation: Fix-Auftrag des Owners vom 25.11.2026 (monarch-proof/grok/fix-G0130-review.md), Abschnitte 1 bis 4 wörtlich; je Befund Test rot zuerst, Namen im PR"
   - "F1 (major, Schutzlücke): cd/pushd mit einer Option, die bash und zsh verschieden lesen (pushd -n, cd -e), hält im cwd-Modell altes und neues Verzeichnis; pushd -n /tmp; git commit im Haupt-Checkout wird verweigert"

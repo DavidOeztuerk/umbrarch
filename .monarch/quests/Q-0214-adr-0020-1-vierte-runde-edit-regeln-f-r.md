@@ -3,7 +3,7 @@ id: Q-0214
 gate: G-0130
 kind: side
 rank: A
-state: in_review
+state: cleared
 dod:
   - "Owner-Entscheid 1 vom 26.11.2026: Edit-Deny-Regeln für die zehn Pfade in <main>/.git mit Begründung; keine Regel auf .git als Ganzes, objects/, refs/, worktrees/"
   - "Begründete Entscheidung zu <main>/.git/.git in denyWrite; Settings-Befehl im gewohnten Stil, an einer Nachbildung getestet"

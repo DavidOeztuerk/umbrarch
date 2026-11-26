@@ -3,7 +3,7 @@ id: Q-0205
 gate: G-0130
 kind: main
 rank: A
-state: in_review
+state: cleared
 dod:
   - "Owner-Entscheid 3 vom 26.11.2026 (Chat): scripts/test-local.sh baut mit --disable-build-servers -m:1 -nodeReuse:false und startet die vier Test-Apps direkt; Exitcode ungleich 0, wenn eine App fehlschlägt; der /bin/ps-Test wird weder aufgeweicht noch ausgefiltert, das Skript nennt ihn als bekannte Grenze der Sandbox; CI unverändert"
   - "Standardregel und Knight: lokale Tests über scripts/test-local.sh"
