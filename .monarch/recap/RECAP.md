@@ -1,10 +1,10 @@
 # RECAP
 
 ## Stand
-- Zeitpunkt: 2026-11-25T21:42:33Z
+- Zeitpunkt: 2026-11-26T00:06:13Z
 - Plan: Pro
-- Mana 5h: 33% (Limit 90%, Reset 2026-11-26T02:00:00Z)
-- Mana 7d: 29% (Limit 96%, Reset 2026-12-02T11:00:00Z)
+- Mana 5h: 86% (Limit 90%, Reset 2026-11-26T02:00:00Z)
+- Mana 7d: 37% (Limit 96%, Reset 2026-12-02T11:00:00Z)
 - Limits: 5h 90%, 7d 96% (plan default)
 
 ## Aktiv
@@ -33,7 +33,7 @@
 - Q-0150: Heikle Quest nach Standardregel 3: Warden-Runde über das Design vor dem Code, kein src-Code, kein anderer Test und keine andere Schwelle aufgeweicht, Schlussrunde des Wardens mit Verdict am Head-SHA
 
 ## Nächster konkreter Schritt
-Q-0202 committet (15a5c82, 0675857), gepusht, in_review. Wartet auf Owner: (1) python3-Befehl Schicht 1 aus ADR-0020 §1 in ~/.claude/settings.json, (2) Hook installieren (Quelle Q-0202), (3) Claude Code in G-0130 neu starten. Owner-Fragen offen: worktree-add-Abweichung (Lock-Heuristik), Gate öffnen, Session im Haupt-Checkout, Warden über Q-0201+Q-0202, Proben b/d vs Worktree-Isolation, Block-Einträge über die Vorgabe hinaus. Danach: Sandbox prüfen, Domains/Schreibpfade im Sandbox-Modus testen, Subagenten-Sandbox, Beweis Punkt 5, schmale Warden-Runde. Nicht mergen.
+G-0130 Head 766af34: TLS-Nachtest und Proben a1-d sauber (ADR-0020 §1 Zweite Runde), Q-0205/Q-0206 committet, Issue #166, #164-Kommentar. Nächster Schritt nach Mana-Reset 02:00 UTC: schmale Warden-Runde über Q-0201 bis Q-0206 (Umgehungen gegen Schicht 1 und 2: Ordner über gesperrtem Pfad umbenennen (.git/refs), packed-refs, Lock-Lösung, allowWrite /private/tmp, enableWeakerNetworkIsolation, 24 denyWrite aus Option C; nicht gegen den Parser), dann gate verdict am Head. Ohne approve: Pause und Bericht. Nicht mergen.
 
 ## Offene Entscheidungen
 - Owner: historische docs (ADR-0001..0018, lessons, evidence) bleiben? Default ja (Vorschlag)
