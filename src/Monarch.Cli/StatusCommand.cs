@@ -43,12 +43,13 @@ internal static class StatusCommand
         var snapshot = ManaStore.ToSnapshot(manaFile, env.Clock.UtcNow, config.Plan);
         var limits = ManaSupport.Resolve(config, ManaSupport.LimitClass(env, manaFile).Class).Limits;
         ManaDecision? guard = snapshot is null ? null : ManaGuard.Decide(snapshot, StepEstimate5h, StepEstimate7d, limits, env.Clock.UtcNow);
+        var guardMessage = guard is { } g && snapshot is not null ? ManaGuard.PendingMessage(g, snapshot, StepEstimate5h, StepEstimate7d, limits, env.Clock.UtcNow) : null;
         var ledger = LedgerVerifier.Verify(paths.Root, ManaCommands.TrustedBranches(config));
         var hook = SecretScanHook.Detect(env.Cwd);
 
         if (json)
         {
-            WriteJson(env, active, counts, xp, level, snapshot, limits, guard, ledger.Ok, hook, forge);
+            WriteJson(env, active, counts, xp, level, snapshot, limits, guard, guardMessage, ledger.Ok, hook, forge);
             return 0;
         }
 
@@ -76,6 +77,7 @@ internal static class StatusCommand
                 ? FormattableString.Invariant($"Mana 5h: {snapshot.Effective5h:0}% / limit {ManaSupport.Num(limits.FiveHourPct)}% · 7d: {snapshot.Effective7d:0}% / limit {ManaSupport.Num(limits.SevenDayPct)}%{(snapshot.IsStale ? " (stale)" : "")}")
                 : FormattableString.Invariant($"Mana 5h: nicht vorhanden · 7d: {snapshot.Effective7d:0}% / limit {ManaSupport.Num(limits.SevenDayPct)}%{(snapshot.IsStale ? " (stale)" : "")}"));
             sb.AppendLine(FormattableString.Invariant($"Mana-Guard for a {StepEstimate5h:0}% step: {guard}"));
+            if (guardMessage is not null) sb.AppendLine(guardMessage);
         }
 
         sb.AppendLine("Penalty zone: off (not computed in phase 0)");
@@ -123,7 +125,7 @@ internal static class StatusCommand
         return xp;
     }
 
-    private static void WriteJson(CliEnv env, ActiveFile? active, (string Name, int Count)[] counts, long xp, long level, ManaSnapshot? s, ManaLimits limits, ManaDecision? guard, bool ledgerOk, SecretScanResult hook, ForgeClearView.Result forge)
+    private static void WriteJson(CliEnv env, ActiveFile? active, (string Name, int Count)[] counts, long xp, long level, ManaSnapshot? s, ManaLimits limits, ManaDecision? guard, string? guardMessage, bool ledgerOk, SecretScanResult hook, ForgeClearView.Result forge)
     {
         using var ms = new MemoryStream();
         using (var w = new Utf8JsonWriter(ms, new JsonWriterOptions { Indented = true }))
@@ -164,6 +166,7 @@ internal static class StatusCommand
             }
 
             if (guard is null) w.WriteNull("guard"); else w.WriteString("guard", guard.ToString());
+            if (guardMessage is not null) w.WriteString("guardMessage", guardMessage);
             w.WriteBoolean("penaltyZone", false);
             w.WriteBoolean("ledgerOk", ledgerOk);
             w.WriteStartObject("secretScanHook");

@@ -242,13 +242,18 @@ internal static class ManaCommands
         var blocked7 = snap.Effective7d + ManaSupport.Step7d > limits.SevenDayPct;
         var reset = !snap.HasFiveHour || (blocked7 && (!blocked5 || snap.SevenDayResetsAt > snap.FiveHourResetsAt)) ? snap.SevenDayResetsAt : snap.FiveHourResetsAt;
         var zone = TimeZoneInfo.Local;
-        var wake = WakePlan.WakeTime(reset, zone);
+        var wake = WakePlan.WakeTime(reset, zone, now);
         var recap = paths.RecapFile;
         env.Out.WriteLine(snap.HasFiveHour
             ? $"5h window resets at {ManaSupport.Iso(snap.FiveHourResetsAt)} (used {Pct(snap.Effective5h)}, limit {Pct(limits.FiveHourPct)})"
             : "5h: nicht vorhanden");
         env.Out.WriteLine($"7d window resets at {ManaSupport.Iso(snap.SevenDayResetsAt)} (used {Pct(snap.Effective7d)}, limit {Pct(limits.SevenDayPct)})");
         env.Out.WriteLine($"Mana-Guard for the next default step ({Pct(ManaSupport.Step5h)}): {decision}");
+        if (ManaGuard.PendingMessage(decision, snap, ManaSupport.Step5h, ManaSupport.Step7d, limits, now) is { } pending)
+        {
+            env.Out.WriteLine(pending);
+        }
+
         env.Out.WriteLine($"Wake at {ManaSupport.Iso(wake)} (reset + {WakePlan.Slack.TotalMinutes:0} min, minute not :00/:30), local {TimeZoneInfo.ConvertTime(wake, zone).ToString("yyyy-MM-dd HH:mm zzz", CultureInfo.InvariantCulture)}");
         env.Out.WriteLine($"Cron: {WakePlan.Cron(wake, zone)}");
         env.Out.WriteLine($"Prompt: {WakePlan.Prompt(recap)}");
@@ -304,6 +309,11 @@ internal static class ManaCommands
         env.Out.WriteLine(snap.HasFiveHour
             ? $"Step {Pct(step5)} (7d {Pct(step7)}): {decision} (5h {(can5 ? "fits" : "does not fit")})"
             : $"Step {Pct(step5)} (7d {Pct(step7)}): {decision} (5h: nicht vorhanden)");
+        if (ManaGuard.PendingMessage(decision, snap, step5, step7, resolved.Limits, env.Clock.UtcNow) is { } pending)
+        {
+            env.Out.WriteLine(pending);
+        }
+
         return 0;
     }
 
@@ -457,7 +467,12 @@ internal static class ManaCommands
             }
             else
             {
-                w.WriteString("decision", ManaGuard.Decide(snap, session, weekly, resolved.Limits, env.Clock.UtcNow).ToString());
+                var decision = ManaGuard.Decide(snap, session, weekly, resolved.Limits, env.Clock.UtcNow);
+                w.WriteString("decision", decision.ToString());
+                if (ManaGuard.PendingMessage(decision, snap, session, weekly, resolved.Limits, env.Clock.UtcNow) is { } pending)
+                {
+                    w.WriteString("message", pending);
+                }
                 w.WriteStartObject("headroom");
                 if (snap.HasFiveHour)
                 {

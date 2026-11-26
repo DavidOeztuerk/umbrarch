@@ -45,6 +45,15 @@ internal sealed class HookToolInput
 
     /// <summary>File filter of the Grep/Glob tools (<c>tool_input.glob</c>).</summary>
     [JsonPropertyName("glob")] public string? Glob { get; set; }
+
+    /// <summary>Subagent type of the Agent/Task tool; read leniently, a non-string counts as missing (ADR-0020 §2a).</summary>
+    [JsonPropertyName("subagent_type")] public System.Text.Json.JsonElement? SubagentType { get; set; }
+
+    /// <summary>Subagent model (<c>opus</c>, <c>sonnet</c>, <c>haiku</c>, full id or <c>inherit</c>); read leniently.</summary>
+    [JsonPropertyName("model")] public System.Text.Json.JsonElement? Model { get; set; }
+
+    /// <summary>Text of a leniently read field, else null.</summary>
+    public static string? Text(System.Text.Json.JsonElement? e) => e is { ValueKind: System.Text.Json.JsonValueKind.String } v ? v.GetString() : null;
 }
 
 /// <summary>Hook stdout envelope.</summary>

@@ -16,14 +16,45 @@ public static class ProjectTargets
         if (call.FilePath is { Length: > 0 } fp) Add(rs.Resolve(PathResolver.ExpandTilde(fp), rs.Cwd));
         if (call.ToolName != "Bash" || call.Command is not { } cmd) return list;
         var segments = BashAnalysis.Segments(cmd);
-        var cur = rs.Cwd;
+        // Zwei Mengen wie das cwd-Modell (ToolCallPolicy.Canon): nach einer Subshell gilt wieder die Menge davor.
+        var cur = new List<string> { rs.Cwd };
+        var scoped = new List<string> { rs.Cwd };
+        var visited = new List<string> { rs.Cwd };
+        var saved = new Stack<List<string>>();
         var bases = new List<string> { rs.Cwd };
-        foreach (var (dir, changes) in BashAnalysis.DirectoryTargets(segments))
+        foreach (var seg in segments)
         {
-            var d = rs.Resolve(PathResolver.ExpandTilde(dir), cur);
-            Add(d);
-            if (!bases.Contains(d)) bases.Add(d);
-            if (changes) cur = d;
+            foreach (var ev in seg.Events)
+            {
+                if (ev == '(') saved.Push(scoped);
+                else if (saved.Count > 0) scoped = saved.Pop();
+            }
+
+            // Wo cd/pushd/popd unklar enden (Option, fehlendes Ziel, Stapelwahl), gilt die Vereinigung aus altem und neuem Verzeichnis.
+            var dirArgs = seg.Word is "cd" or "pushd" or "popd" ? BashAnalysis.ParseDirArgs(seg) : null;
+            if (seg.Word == "popd" || dirArgs is { StackSelect: true })
+            {
+                cur = Merge(cur, visited);
+                scoped = Merge(scoped, visited);
+            }
+
+            foreach (var (dir, changes) in BashAnalysis.DirectoryTargets([seg]))
+            {
+                var expanded = PathResolver.ExpandTilde(dir);
+                var d = cur.Select(c => rs.Resolve(expanded, c)).Distinct().ToList();
+                var s = scoped.Select(c => rs.Resolve(expanded, c)).Distinct().ToList();
+                foreach (var p in d.Concat(s))
+                {
+                    Add(p);
+                    if (!bases.Contains(p)) bases.Add(p);
+                }
+
+                if (!changes) continue;
+                var keep = dirArgs is { UncertainOption: true } or { Ambiguous: true } || !d.Concat(s).Any(Directory.Exists);
+                cur = keep ? Merge(cur, d) : d;
+                scoped = keep ? Merge(scoped, s) : s;
+                visited = Merge(visited, cur);
+            }
         }
 
         foreach (var token in BashAnalysis.PathTokens(cmd))
@@ -41,4 +72,6 @@ public static class ProjectTargets
 
         return list;
     }
+
+    private static List<string> Merge(List<string> a, List<string> b) => [.. a.Union(b)];
 }

@@ -75,6 +75,12 @@ internal static class QuestCommands
                 var decision = ManaGuard.Decide(snapshot, scaled.SessionPct, scaled.WeeklyPct, limits, env.Clock.UtcNow);
                 if (decision != ManaDecision.Proceed)
                 {
+                    // ADR-0020 §3: after a reset the stand is renewed; the session checks again instead of stopping.
+                    if (ManaGuard.PendingMessage(decision, snapshot, scaled.SessionPct, scaled.WeeklyPct, limits, env.Clock.UtcNow) is { } pending)
+                    {
+                        return Refuse(env, $"{pending} {pairLine}");
+                    }
+
                     // #87: nach dem Reset ist ein alter Stand veraltet. Die Ablehnung bleibt; die Meldung nennt den Grund und den Weg.
                     var windowReset = snapshot.HasFiveHour ? snapshot.FiveHourResetsAt : snapshot.SevenDayResetsAt;
                     var stale = snapshot.IsStale && windowReset <= env.Clock.UtcNow

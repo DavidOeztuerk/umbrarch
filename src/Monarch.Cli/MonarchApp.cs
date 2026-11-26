@@ -149,6 +149,21 @@ internal static class MonarchApp
         gateCheck.Arguments.Add(checkGate);
         gateCheck.SetAction(r => GateMergeCommands.Check(env, r.GetValue(checkGate)!));
         gate.Subcommands.Add(gateCheck);
+        var moveQuest = new Argument<string>("quest") { Description = "Quest id." };
+        var moveTo = new Option<string>("--to") { Description = "Target gate id.", Required = true };
+        var gateMoveQuest = new Command("move-quest", "Move a quest to another gate: both gate lists, the quest file and QuestMoved (proposed or accepted, not active).");
+        gateMoveQuest.Arguments.Add(moveQuest);
+        gateMoveQuest.Options.Add(moveTo);
+        gateMoveQuest.SetAction(r => GateCommands.MoveQuest(env, r.GetValue(moveQuest)!, r.GetValue(moveTo)!));
+        gate.Subcommands.Add(gateMoveQuest);
+        var cleanupGate = new Argument<string>("id") { Description = "Gate id." };
+        var gateCleanup = new Command("cleanup", "After gate merge and a green gate check: commit the Monarch state in the gate worktree ([skip ci]), push the gate branch and remove the worktree without force (main only, from the main checkout).");
+        gateCleanup.Arguments.Add(cleanupGate);
+        gateCleanup.SetAction(r => GateCleanupCommands.Cleanup(env, r.GetValue(cleanupGate)!));
+        gate.Subcommands.Add(gateCleanup);
+        var gateCarry = new Command("carry", "Take the state of merged gates and their quests from refs/remotes/origin/monarch/G-* into this worktree: only the field state, only gates that exist here, no ledger files, no commit (main only).");
+        gateCarry.SetAction(_ => GateCarryCommands.Carry(env));
+        gate.Subcommands.Add(gateCarry);
         root.Subcommands.Add(gate);
 
         var next = new Option<string?>("--next") { Description = "The next concrete step." };
@@ -165,7 +180,7 @@ internal static class MonarchApp
 
         var wake = new Command("wake", "Out-of-session wake call (opt-in via mana.wake): schedule, fire, cancel.");
         var wakeSession = new Option<string>("--session") { Description = "Session UUID.", Required = true };
-        var wakeAt = new Option<string>("--at") { Description = "Wake time, ISO-8601 (resets_at + 3 min, from 'monarch rest').", Required = true };
+        var wakeAt = new Option<string>("--at") { Description = "Wake time, ISO-8601 (resets_at + 1 min, from 'monarch rest').", Required = true };
         var wakeSchedule = new Command("schedule", "Install the one-shot job (launchd or systemd; owner opt-in).");
         wakeSchedule.Options.Add(wakeSession);
         wakeSchedule.Options.Add(wakeAt);

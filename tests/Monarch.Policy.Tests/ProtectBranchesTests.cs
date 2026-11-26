@@ -294,4 +294,19 @@ public sealed class ProtectBranchesTests : IDisposable
         Denied(cmd, repo, agent: "scout");
         Allowed(cmd, repo);
     }
+
+    [Theory]
+    [InlineData("monarch gate cleanup G-0101")]
+    [InlineData("monarch gate carry")]
+    [InlineData("monarch gate move-quest Q-0001 --to G-0102")]
+    [InlineData("~/.monarch/bin/monarch gate cleanup G-0101")]
+    [InlineData("bash -c 'monarch gate carry'")]
+    public void Gate_cleanup_carry_and_move_quest_are_main_only(string cmd)
+    {
+        var repo = Repo("r", "ref: refs/heads/feature");
+        Denied(cmd, repo, agent: "monarch:knight");
+        Denied(cmd, repo, agent: "monarch:warden");
+        Denied(cmd, repo, agent: "general-purpose");
+        Allowed(cmd, repo);
+    }
 }

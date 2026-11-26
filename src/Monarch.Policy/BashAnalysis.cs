@@ -9,7 +9,10 @@ internal static class BashAnalysis
     private static readonly string[] Wrappers = ["sudo", "env", "command", "builtin", "exec", "nohup", "time", "nice", "timeout", "setsid"];
     private static readonly string[] Keywords = ["if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done", "case", "esac", "{", "}", "!"];
     private static readonly string[] SudoOptionsWithValue = ["-u", "-g", "-h", "-p", "-U", "-C", "-D", "-R", "-T"];
-    private static readonly string[] EnvOptionsWithValue = ["-u", "-C", "-S", "-P"];
+    private const string EnvShortOptionsWithValue = "CuSPa";
+    private static readonly string[] EnvLongOptionsWithValue = ["chdir", "unset", "split-string", "argv0"];
+    private static readonly string[] GitOptionsWithValue =
+        ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env", "--attr-source", "--shallow-file"];
     private static readonly string[] Shells = ["bash", "sh", "zsh", "dash"];
     private static readonly string[] StdinCodeSinks = ["bash", "sh", "zsh", "dash", "source", ".", "eval"];
     private static readonly string[] DeclareWords = ["export", "declare", "local", "readonly", "typeset"];
@@ -66,7 +69,8 @@ internal static class BashAnalysis
             var raw = raws[k];
             var assignments = new List<string>();
             var names = new List<string>();
-            var tokens = Strip([.. raw.Words.Where(w => w.Length > 0)], assignments, names);
+            var envDirs = new List<string>();
+            var tokens = Strip([.. raw.Words.Where(w => w.Length > 0)], assignments, names, envDirs);
             if (tokens.Length > 0 && Array.IndexOf(DeclareWords, tokens[0]) >= 0)
                 foreach (var t in tokens.Skip(1))
                     if (IsAssignment(t)) { assignments.Add(AssignmentValue(t)); names.Add(AssignmentName(t)); }
@@ -95,16 +99,34 @@ internal static class BashAnalysis
             if (depth < 3 && Array.IndexOf(Shells, Path.GetFileName(tokens[0])) >= 0)
             {
                 var c = Array.IndexOf(tokens, "-c");
-                if (c >= 0 && c + 1 < tokens.Length) AddSubshell(result, Segments(string.Join(' ', tokens[(c + 1)..]), depth + 1), ref pendingClose);
+                if (c >= 0 && c + 1 < tokens.Length) AddSubshell(result, WithEnvDirs(envDirs, Segments(string.Join(' ', tokens[(c + 1)..]), depth + 1)), ref pendingClose);
             }
 
-            // Heredoc-Bodies sind Daten, außer sie gehen an eine Shell (direkt oder per Pipe).
-            if (depth < 3 && raw.Heredoc is { Length: > 0 } hd
-                && (ReadsCodeFromStdin(tokens) || (raw.PipesToNext && k + 1 < raws.Count && ReadsCodeFromStdin(Strip([.. raws[k + 1].Words])))))
-                AddSubshell(result, Segments(hd.ToString(), depth + 1), ref pendingClose);
+            // Heredoc-Bodies sind Daten, außer sie gehen an eine Shell (direkt oder per Pipe). Das env-Verzeichnis gehört zur Shell, nicht zum Befehl vor der Pipe.
+            if (depth < 3 && raw.Heredoc is { Length: > 0 } hd)
+            {
+                var shellDirs = new List<string>();
+                var toShell = ReadsCodeFromStdin(tokens) ? envDirs
+                    : raw.PipesToNext && k + 1 < raws.Count && ReadsCodeFromStdin(Strip([.. raws[k + 1].Words], envDirs: shellDirs)) ? shellDirs
+                    : null;
+                if (toShell is not null) AddSubshell(result, WithEnvDirs(toShell, Segments(hd.ToString(), depth + 1)), ref pendingClose);
+            }
         }
 
         return result;
+    }
+
+    /// <summary>Die Shell hinter <c>env -C dir</c> startet in <c>dir</c>: ein <c>cd</c> je Verzeichnis vor ihrem Code, damit das cwd-Modell es sieht.</summary>
+    private static List<Segment> WithEnvDirs(List<string> envDirs, List<Segment> nested)
+    {
+        if (envDirs.Count == 0 || nested.Count == 0) return nested;
+        var cds = envDirs.Select(d =>
+        {
+            // env liest den Wert von -C wörtlich; cd läse "-d" als Option und "-" als OLDPWD.
+            var target = d.StartsWith('-') ? "./" + d : d;
+            return new Segment("cd " + target, ["cd", target], Canonicalize(["cd", target], "cd " + target)) { RawWords = ["cd", target] };
+        });
+        return [.. cds, .. nested];
     }
 
     private static void AddSubshell(List<Segment> result, List<Segment> nested, ref string pendingClose)
@@ -241,9 +263,7 @@ internal static class BashAnalysis
             var t = seg.Tokens;
             if (seg.Word is "cd" or "pushd")
             {
-                var i = 1;
-                while (i < t.Length && t[i].StartsWith('-') && t[i].Length > 1) i++;
-                if (i < t.Length) list.Add((t[i], true));
+                if (ParseDirArgs(seg).Operands is [var first, ..]) list.Add((first, true));
                 continue;
             }
 
@@ -256,20 +276,39 @@ internal static class BashAnalysis
                 }
                 else if (t[i].StartsWith("--git-dir=", StringComparison.Ordinal)) list.Add((t[i]["--git-dir=".Length..], false));
                 else if (t[i].StartsWith("--work-tree=", StringComparison.Ordinal)) list.Add((t[i]["--work-tree=".Length..], false));
-                else if (t[i] is "-c") i++;
+                else if (GitOptionTakesValue(t[i])) i++;
             }
         }
 
         return list;
     }
 
-    /// <summary>Ziel von <c>cd</c>/<c>pushd</c> (erstes Argument ohne Option); ohne Argument das Home-Verzeichnis (<c>~</c>).</summary>
-    public static string CdTarget(Segment seg)
+    /// <summary>
+    /// Argumente von <c>cd</c>/<c>pushd</c>: Operanden (nach <c>--</c> und nach dem ersten Operanden wörtlich), ob eine Option außer <c>-L</c>/<c>-P</c> dasteht
+    /// (auch zsh <c>-q</c>/<c>-s</c>) und ob <c>+N</c>/<c>-N</c> einen Stapeleintrag wählt. Unklar heißt nicht erlaubt: bash und zsh lesen das verschieden.
+    /// </summary>
+    public sealed record DirArgs(List<string> Operands, bool UncertainOption, bool StackSelect)
     {
-        var t = seg.Tokens;
-        var i = 1;
-        while (i < t.Length && t[i].StartsWith('-') && t[i].Length > 1) i++;
-        return i < t.Length ? t[i] : "~";
+        /// <summary>Zwei Operanden (zsh ersetzt Text im PWD) oder Stapelwahl: Das Ziel ist nicht eindeutig.</summary>
+        public bool Ambiguous => StackSelect || Operands.Count > 1;
+    }
+
+    public static DirArgs ParseDirArgs(Segment seg)
+    {
+        var ops = new List<string>();
+        var uncertain = false;
+        var stack = false;
+        var literal = false;
+        foreach (var t in seg.Tokens.Skip(1))
+        {
+            if (literal || ops.Count > 0) ops.Add(t);
+            else if (t == "--") literal = true;
+            else if (t.Length > 1 && (t[0] == '-' || t[0] == '+') && t[1..].All(char.IsAsciiDigit)) stack = true;
+            else if (t.Length > 1 && t[0] == '-') uncertain |= !t[1..].All(ch => ch is 'L' or 'P');
+            else ops.Add(t);
+        }
+
+        return new DirArgs(ops, uncertain, stack);
     }
 
     /// <summary>Git-Unterkommando (nach Globaloptionen wie <c>-C dir</c>) und sein Index, sonst <c>null</c>.</summary>
@@ -278,15 +317,49 @@ internal static class BashAnalysis
         index = -1;
         if (tokens.Length == 0 || Path.GetFileName(tokens[0]) != "git") return null;
         var i = 1;
-        while (i < tokens.Length && tokens[i].StartsWith('-')) i += tokens[i] is "-C" or "-c" or "--git-dir" or "--work-tree" ? 2 : 1;
+        while (i < tokens.Length && tokens[i].StartsWith('-')) i += GitOptionTakesValue(tokens[i]) ? 2 : 1;
         if (i >= tokens.Length) return null;
         index = i;
         return tokens[i];
     }
 
-    private static string[] Strip(string[] tokens, List<string>? assignments = null, List<string>? names = null)
+    /// <summary>Globale Git-Option, deren Wert als eigenes Token folgt (<c>git.c</c>, <c>handle_options</c>).</summary>
+    public static bool GitOptionTakesValue(string token) => Array.IndexOf(GitOptionsWithValue, token) >= 0;
+
+    /// <summary>
+    /// Eine Option von <c>env</c> wie getopt: gebündelte Kurzoptionen (<c>-iC dir</c>), angehängter Wert (<c>-Cdir</c>), lange Optionen mit
+    /// <c>=</c> oder eigenem Wert. Setzt <paramref name="dir"/> bei <c>-C</c>/<c>--chdir</c>; gibt die Zahl der verbrauchten Tokens zurück.
+    /// </summary>
+    private static int EnvOption(string[] tokens, int i, ref string? dir)
+    {
+        var o = tokens[i];
+        if (o.StartsWith("--", StringComparison.Ordinal))
+        {
+            var eq = o.IndexOf('=');
+            var name = eq < 0 ? o[2..] : o[2..eq];
+            // getopt_long nimmt eindeutige Kürzungen an (--ch für --chdir); gelesen wird streng, jede passende Option mit Wert zählt.
+            var match = name.Length == 0 ? null : EnvLongOptionsWithValue.FirstOrDefault(l => l.StartsWith(name, StringComparison.Ordinal));
+            var value = eq >= 0 ? o[(eq + 1)..] : i + 1 < tokens.Length ? tokens[i + 1] : null;
+            if (match == "chdir" && value is not null) dir = value;
+            return eq < 0 && match is not null ? 2 : 1;
+        }
+
+        for (var k = 1; k < o.Length; k++)
+        {
+            if (!EnvShortOptionsWithValue.Contains(o[k], StringComparison.Ordinal)) continue;
+            var attached = o[(k + 1)..];
+            var value = attached.Length > 0 ? attached : i + 1 < tokens.Length ? tokens[i + 1] : null;
+            if (o[k] == 'C' && value is not null) dir = value;
+            return attached.Length > 0 ? 1 : 2;
+        }
+
+        return 1;
+    }
+
+    private static string[] Strip(string[] tokens, List<string>? assignments = null, List<string>? names = null, List<string>? envDirs = null)
     {
         var i = 0;
+        var chdirs = new List<string>();
         while (i < tokens.Length)
         {
             var t = tokens[i];
@@ -294,18 +367,28 @@ internal static class BashAnalysis
             if (Array.IndexOf(Keywords, t) >= 0) { i++; continue; }
             if (Array.IndexOf(Wrappers, t) < 0) break;
             i++;
+            string? envDir = null; // env nimmt je Aufruf nur das letzte -C
             while (i < tokens.Length && tokens[i].StartsWith('-'))
             {
-                var withValue = (t == "sudo" && Array.IndexOf(SudoOptionsWithValue, tokens[i]) >= 0)
-                    || (t == "env" && Array.IndexOf(EnvOptionsWithValue, tokens[i]) >= 0)
-                    || (t == "nice" && tokens[i] == "-n");
+                if (t == "env") { i += EnvOption(tokens, i, ref envDir); continue; }
+                var o = tokens[i];
+                var withValue = (t == "sudo" && Array.IndexOf(SudoOptionsWithValue, o) >= 0) || (t == "nice" && o == "-n");
                 i += withValue ? 2 : 1;
             }
 
+            if (envDir is not null) chdirs.Add(envDir);
             if (t == "timeout" && i < tokens.Length) i++; // Dauer
         }
 
-        return i >= tokens.Length ? [] : tokens[i..];
+        envDirs?.AddRange(chdirs);
+        if (i >= tokens.Length) return [];
+        var rest = tokens[i..];
+        // env -C <dir> git … wirkt wie git -C <dir> …; so sehen die Git-Regeln das Verzeichnis (ADR-0020 Abschnitt 1).
+        if (chdirs.Count == 0 || Path.GetFileName(rest[0]) != "git") return rest;
+        var withDirs = new List<string>(rest.Length + 2 * chdirs.Count) { rest[0] };
+        foreach (var d in chdirs) { withDirs.Add("-C"); withDirs.Add(d); }
+        withDirs.AddRange(rest[1..]);
+        return [.. withDirs];
     }
 
     private static bool IsAssignment(string t)

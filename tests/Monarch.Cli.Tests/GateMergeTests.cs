@@ -1400,4 +1400,57 @@ public class GateMergeTests
             Assert.False(body.TryGetProperty("commit_title", out _));
         }
     }
+
+    [Fact]
+    public void Successful_merge_sets_the_gate_state_to_merged()
+    {
+        var (p, f) = Setup("E", "E");
+        using (p)
+        {
+            Warden(p, "umbrarch:warden");
+            Assert.Equal(0, Verdict(p).Code);
+            var m = Merge(p);
+            Assert.Equal(0, m.Code);
+            Assert.Single(f.MergeBodies);
+            var text = File.ReadAllText(Directory.GetFiles(Path.Combine(p.Root, ".monarch", "gates"), "G-0001*").Single());
+            Assert.Matches(new System.Text.RegularExpressions.Regex("^state: merged$", System.Text.RegularExpressions.RegexOptions.Multiline), text);
+        }
+    }
+
+    [Fact]
+    public void Merged_gate_refuses_a_second_merge_and_a_late_verdict()
+    {
+        var (p, f) = Setup("E", "E");
+        using (p)
+        {
+            Warden(p, "umbrarch:warden");
+            Assert.Equal(0, Verdict(p).Code);
+            Assert.Equal(0, Merge(p).Code);
+            Assert.Single(f.MergeBodies);
+
+            var again = p.Run(["gate", "merge", "G-0001"]);
+            Assert.Equal(1, again.Code);
+            Assert.Contains("is merged, not open", again.Out + again.Err, StringComparison.Ordinal);
+
+            var late = p.Run(["gate", "verdict", "G-0001", "--verdict", "approve", "--source", "https://x"]);
+            Assert.Equal(1, late.Code);
+            Assert.Contains("is merged, not open", late.Out + late.Err, StringComparison.Ordinal);
+            Assert.Single(p.Events(), e => e.Type == "GateMerged");
+        }
+    }
+
+    [Fact]
+    public void Gate_check_is_not_refused_as_closed_after_the_merge()
+    {
+        var (p, f) = Setup("E", "E");
+        using (p)
+        {
+            Warden(p, "umbrarch:warden");
+            Assert.Equal(0, Verdict(p).Code);
+            Assert.Equal(0, Merge(p).Code);
+            Assert.Single(f.MergeBodies);
+            var check = p.Run(["gate", "check", "G-0001"]);
+            Assert.DoesNotContain("not open", check.Out + check.Err, StringComparison.Ordinal);
+        }
+    }
 }

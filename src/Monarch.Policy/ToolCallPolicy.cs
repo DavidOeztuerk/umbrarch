@@ -17,7 +17,7 @@ public static class QuestAcceptancePolicy
 /// Tool-Call-Policy für den PreToolUse-Hook. Alle Regeln werden ausgewertet und mit der Rangfolge
 /// Deny vor Ask vor Allow kombiniert (wie in Claude Code); Signale aller Regeln bleiben erhalten.
 /// Reihenfolge der Regeln (bestimmt, welches Deny gemeldet wird): protect_paths, protect_secrets, deny_bash,
-/// shadow_read_only, protect_branches, refuse_high_rank_in_bypass_mode, scope_lock, rank_s_approval.
+/// shadow_read_only, protect_branches, protect_main_checkout, refuse_high_rank_in_bypass_mode, scope_lock, rank_s_approval.
 /// Pfade werden kanonisiert (relativ zu <see cref="ToolCall.Cwd"/>, <c>.</c>/<c>..</c>/<c>//</c> normalisiert, Symlinks aufgelöst, Wurzel und Ziel gleich);
 /// der Vergleich gegen geschützte Pfade und Secret-Globs ist case-insensitiv.
 /// </summary>
@@ -63,6 +63,7 @@ public static partial class ToolCallPolicy
         Add(DenyBash(call, context, segments));
         Add(ShadowReadOnly(call, context, segments));
         Add(ProtectBranches(call, context, segments, paths));
+        Add(ProtectMainCheckout(call, context, segments, paths));
         Add(RefuseHighRank(call, context));
         Add(ScopeLock(call, context, paths));
         Add(RankS(call, context));
@@ -70,17 +71,18 @@ public static partial class ToolCallPolicy
     }
 
     /// <summary>
-    /// Nur protect_paths, protect_secrets und protect_branches, kombiniert (Deny vor Ask). Für Projekte, die nur als Ziel eines Tool-Calls vorkommen
+    /// Nur protect_paths, protect_secrets, protect_branches und protect_main_checkout, kombiniert (Deny vor Ask). Für Projekte, die nur als Ziel eines Tool-Calls vorkommen
     /// (das cwd-Projekt wertet <see cref="Evaluate"/> vollständig aus).
     /// </summary>
     public static PolicyDecision EvaluateProtection(ToolCall call, PolicyContext context)
     {
         var segments = call.ToolName == "Bash" && call.Command is { } cmd ? BashAnalysis.Segments(cmd) : [];
         var paths = new Canon(call, context, segments);
-        var results = new List<PolicyDecision>(3);
+        var results = new List<PolicyDecision>(4);
         if (ProtectPaths(call, context, segments, paths) is { } a) results.Add(a);
         if (ProtectSecrets(call, context, segments, paths) is { } b) results.Add(b);
         if (ProtectBranches(call, context, segments, paths) is { } c) results.Add(c);
+        if (ProtectMainCheckout(call, context, segments, paths) is { } e) results.Add(e);
         return Combine(results);
     }
 
@@ -94,6 +96,7 @@ public static partial class ToolCallPolicy
         private readonly PathResolver _rs;
         private readonly List<string> _bases;
         private readonly string[][] _cwdAt;
+        private readonly bool[] _ambiguousAt;
         private readonly PolicyContext _ctx;
         private bool? _bareMonarch;
 
@@ -105,6 +108,8 @@ public static partial class ToolCallPolicy
             if (call.Cwd.StartsWith('/') && PathResolver.Lexical(call.Cwd, "/") is var lex && !start.Contains(lex)) start.Add(lex);
             _bases = [.. start];
             _cwdAt = new string[segments.Count][];
+            _ambiguousAt = new bool[segments.Count];
+            var ambiguous = false; // bleibt für den Rest des Befehls gesetzt
 
             // cwd-Modell: aktuelle Kandidaten, OLDPWD (cd -), Verzeichnisstapel (pushd/popd) und die Zustände vor offenen Subshells.
             // Wo das Modell unsicher ist, gilt die Vereinigung aller möglichen Verzeichnisse.
@@ -122,22 +127,35 @@ public static partial class ToolCallPolicy
                 }
 
                 _cwdAt[i] = [.. cur];
+                _ambiguousAt[i] = ambiguous;
                 switch (seg.Word)
                 {
                     case "cd":
                     {
-                        var target = BashAnalysis.CdTarget(seg);
-                        var next = target == "-" ? prev : Resolve(target, cur);
+                        var a = BashAnalysis.ParseDirArgs(seg);
+                        ambiguous |= a.Ambiguous;
+                        var target = a.Operands.Count > 0 ? a.Operands[0] : a.StackSelect ? null : "~";
+                        var next = target is null ? cur : target == "-" ? prev : Resolve(target, cur);
+                        if (a.StackSelect) next = UnionAll(next, stack);
+                        // Option, zwei Operanden oder fehlendes Ziel: bash und zsh enden verschieden, also altes und neues Verzeichnis.
+                        if (a.UncertainOption || a.Ambiguous || (target is not null and not "-" && !next.Any(Directory.Exists))) next = Union(cur, next);
                         (prev, cur) = (cur, next);
                         break;
                     }
 
                     case "pushd":
                     {
-                        var operands = seg.Tokens.Skip(1).Count(t => !t.StartsWith('-') || t.Length == 1);
+                        var a = BashAnalysis.ParseDirArgs(seg);
+                        ambiguous |= a.Ambiguous;
                         List<string> next;
-                        if (operands == 0) next = Union(cur, stack.Count > 0 ? stack[^1] : cur); // vertauscht die obersten Einträge
-                        else next = Resolve(BashAnalysis.CdTarget(seg), cur);
+                        if (a.StackSelect) next = UnionAll(cur, stack);
+                        else if (a.Operands.Count == 0) next = Union(cur, stack.Count > 0 ? stack[^1] : cur); // vertauscht die obersten Einträge
+                        else
+                        {
+                            next = Resolve(a.Operands[0], cur);
+                            if (a.UncertainOption || a.Ambiguous || !next.Any(Directory.Exists)) next = Union(cur, next);
+                        }
+
                         stack.Add(cur);
                         (prev, cur) = (cur, next);
                         break;
@@ -145,6 +163,7 @@ public static partial class ToolCallPolicy
 
                     case "popd":
                     {
+                        ambiguous |= BashAnalysis.ParseDirArgs(seg).StackSelect;
                         if (stack.Count == 0) break;
                         List<string> next;
                         if (seg.Tokens.Length > 1)
@@ -182,6 +201,12 @@ public static partial class ToolCallPolicy
                 foreach (var v in AbsFrom(target, c))
                     if (!next.Contains(v) && next.Count < MaxCandidates) next.Add(v);
             return next.Count > 0 ? next : from;
+        }
+
+        private static List<string> UnionAll(List<string> a, List<List<string>> entries)
+        {
+            foreach (var e in entries) a = Union(a, e);
+            return a;
         }
 
         private static List<string> Union(List<string> a, List<string> b)
@@ -236,6 +261,9 @@ public static partial class ToolCallPolicy
 
         /// <summary>Wirksame Arbeitsverzeichnisse (logisch und physisch) vor dem Segment <paramref name="index"/>.</summary>
         public string[] CwdAt(int index) => _cwdAt[index];
+
+        /// <summary>True, wenn vor dem Segment ein <c>cd</c>/<c>pushd</c>/<c>popd</c> stand, dessen Ziel sich nicht eindeutig bestimmen lässt.</summary>
+        public bool AmbiguousAt(int index) => _ambiguousAt[index];
 
         /// <summary>Kanonischer absoluter Pfad eines Datei-Tool-Ziels (ohne Tilde-Expansion), aufgelöst gegen das cwd.</summary>
         public string AbsFile(string path) => _rs.Resolve(path, _rs.Cwd);

@@ -162,6 +162,86 @@ internal static class GateCommands
         return 0;
     }
 
+    /// <summary>
+    /// Moves a quest to another gate (ADR-0020 §5): target gate list, source gate lists, quest file, then QuestMoved. Every step sets a target state,
+    /// so a second call completes an interrupted one; when everything is already at the target it reports "already moved" and logs nothing.
+    /// </summary>
+    public static int MoveQuest(CliEnv env, string questId, string toGate)
+    {
+        if (ProjectPaths.Locate(env.Cwd, env.Home) is not { } paths)
+        {
+            return Refuse(env, "not an awakened project.");
+        }
+
+        // ADR-0020 §5: move-quest runs in the gate worktree; the main checkout is never touched (a linked worktree has a .git file, not a directory).
+        if (Directory.Exists(Path.Combine(paths.Root, ".git")))
+        {
+            return Refuse(env, "gate move-quest runs in the gate worktree, not in the main checkout.");
+        }
+
+        var board = new LocalFileBoard(paths.Root);
+        var quest = board.ListQuestsAsync().GetAwaiter().GetResult().FirstOrDefault(q => q.Id.Value == questId);
+        if (quest is null)
+        {
+            return Refuse(env, $"quest {questId} not found.");
+        }
+
+        var gates = board.ListGatesAsync().GetAwaiter().GetResult();
+        var target = gates.FirstOrDefault(g => g.Id.Value == toGate);
+        if (target is null)
+        {
+            return Refuse(env, $"gate {toGate} not found.");
+        }
+
+        if (ActiveStore.Read(paths)?.QuestId == questId)
+        {
+            return Refuse(env, $"quest {questId} is active; it cannot be moved.");
+        }
+
+        if (quest.State is not (QuestState.Proposed or QuestState.Accepted))
+        {
+            return Refuse(env, $"quest {questId} is {QuestCommands.StateName(quest.State)}; only proposed or accepted quests can be moved.");
+        }
+
+        var sources = gates.Where(g => g.Id != target.Id && g.Quests.Contains(quest.Id)).ToList();
+        var inTarget = target.Quests.Contains(quest.Id);
+        if (quest.Gate == target.Id && inTarget && sources.Count == 0)
+        {
+            env.Out.WriteLine($"already moved: {questId} is in {toGate}.");
+            return 0;
+        }
+
+        var from = quest.Gate != target.Id ? quest.Gate.Value : sources.Count > 0 ? sources[0].Id.Value : quest.Gate.Value;
+
+        // Order per ADR-0020 §5: target gate, sources, quest; each file is written atomically.
+        if (!inTarget)
+        {
+            board.UpsertGateAsync(target with { Quests = [.. target.Quests, quest.Id] }).GetAwaiter().GetResult();
+        }
+
+        foreach (var s in sources)
+        {
+            board.UpsertGateAsync(s with { Quests = [.. s.Quests.Where(q => q != quest.Id)] }).GetAwaiter().GetResult();
+        }
+
+        if (quest.Gate != target.Id)
+        {
+            board.UpsertQuestAsync(quest with { Gate = target.Id }).GetAwaiter().GetResult();
+        }
+
+        if (from == toGate)
+        {
+            // Only the target list was repaired; the quest did not change gates.
+            env.Out.WriteLine($"repaired: {questId} is now listed in {toGate}.");
+            return 0;
+        }
+
+        var ledger = new ProjectLedger(paths, env.Clock);
+        ledger.Append(ledger.SessionId(), "cli", "QuestMoved", ("quest", questId), ("from", from), ("to", toGate));
+        env.Out.WriteLine($"moved {questId} from {from} to {toGate}.");
+        return 0;
+    }
+
     /// <summary>Upserts milestones and issues on GitHub and writes their numbers back into the files.</summary>
     public static int Sync(CliEnv env, bool github, string? owner, string? repo)
     {

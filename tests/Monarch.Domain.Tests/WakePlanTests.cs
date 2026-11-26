@@ -7,32 +7,40 @@ public class WakePlanTests
     private static readonly TimeZoneInfo Berlin = TimeZoneInfo.FindSystemTimeZoneById("Europe/Berlin");
 
     [Fact]
-    public void WakeTime_is_reset_plus_three_minutes()
+    public void WakeTime_is_reset_plus_one_minute()
     {
         var reset = new DateTimeOffset(2026, 10, 28, 19, 30, 0, TimeSpan.Zero);
-        Assert.Equal(new DateTimeOffset(2026, 10, 28, 19, 33, 0, TimeSpan.Zero), WakePlan.WakeTime(reset, TimeZoneInfo.Utc));
+        Assert.Equal(new DateTimeOffset(2026, 10, 28, 19, 31, 0, TimeSpan.Zero), WakePlan.WakeTime(reset, TimeZoneInfo.Utc));
     }
 
     [Theory]
-    [InlineData(57, 0)] // 12:57 + 3 = 13:00 -> 13:01
-    [InlineData(27, 0)] // 12:27 + 3 = 12:30 -> 12:31
+    [InlineData(59, 0)] // 12:59 + 1 = 13:00 -> 13:01
+    [InlineData(29, 0)] // 12:29 + 1 = 12:30 -> 12:31
     public void WakeTime_never_lands_on_the_hour_or_half_hour(int minute, int second)
     {
         var reset = new DateTimeOffset(2026, 10, 28, 12, minute, second, TimeSpan.Zero);
         var wake = WakePlan.WakeTime(reset, TimeZoneInfo.Utc);
         Assert.NotEqual(0, wake.Minute);
         Assert.NotEqual(30, wake.Minute);
-        Assert.Equal(1, (wake - reset.AddMinutes(3)).TotalMinutes);
+        Assert.Equal(1, (wake - reset.AddMinutes(1)).TotalMinutes);
     }
 
     [Fact]
     public void WakeTime_checks_the_minute_in_the_local_zone()
     {
-        // Kolkata is UTC+5:30: 12:27Z is 17:57 local, +3 min = 18:00 local, so the wake moves on by one minute.
+        // Kolkata is UTC+5:30: 12:29Z is 17:59 local, + 1 min = 18:00 local, so the wake moves on by one minute.
         var kolkata = TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata");
-        var reset = new DateTimeOffset(2026, 10, 28, 12, 27, 0, TimeSpan.Zero);
+        var reset = new DateTimeOffset(2026, 10, 28, 12, 29, 0, TimeSpan.Zero);
         var wake = WakePlan.WakeTime(reset, kolkata);
         Assert.Equal(new DateTimeOffset(2026, 10, 28, 12, 31, 0, TimeSpan.Zero), wake);
+    }
+
+    [Fact]
+    public void WakeTime_after_a_passed_reset_is_now_plus_one_minute()
+    {
+        var reset = new DateTimeOffset(2026, 10, 27, 11, 55, 0, TimeSpan.Zero);
+        var now = new DateTimeOffset(2026, 10, 27, 12, 0, 20, TimeSpan.Zero);
+        Assert.Equal(new DateTimeOffset(2026, 10, 27, 12, 1, 0, TimeSpan.Zero), WakePlan.WakeTime(reset, TimeZoneInfo.Utc, now));
     }
 
     [Fact]
@@ -72,7 +80,7 @@ public class WakePlanTests
     [Fact]
     public void ResetsAt_is_the_wake_time_minus_slack_but_activity_cutoff_is_before_it()
     {
-        var at = new DateTimeOffset(2026, 10, 28, 19, 33, 0, TimeSpan.Zero);
+        var at = new DateTimeOffset(2026, 10, 28, 19, 31, 0, TimeSpan.Zero);
         Assert.Equal(new DateTimeOffset(2026, 10, 28, 19, 30, 0, TimeSpan.Zero), WakePlan.ResetsAt(at));
     }
 }

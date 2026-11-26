@@ -24,6 +24,12 @@ public static class PolicyRules
     public const string DenyBash = "deny_bash";
     /// <summary>Schutz geschützter Branches und Merge-Wege (ADR-0007).</summary>
     public const string ProtectBranches = "protect_branches";
+    /// <summary>Schutz des Haupt-Checkouts eines erweckten Projekts (ADR-0020).</summary>
+    public const string ProtectMainCheckout = "protect_main_checkout";
+    /// <summary>Mana reicht nicht für den Start eines Shadows (ADR-0020 §2a).</summary>
+    public const string ManaShadowStart = "mana_shadow_start";
+    /// <summary>Mana-Grenze im laufenden Shadow erreicht (ADR-0020 §2b).</summary>
+    public const string ManaBrake = "mana_brake";
     /// <summary>Read-only Shadow-Klassen.</summary>
     public const string ShadowReadOnly = "shadow_read_only";
     /// <summary>Hoher Rank in permissiven Modi (ADR-0002).</summary>
@@ -136,6 +142,9 @@ public sealed record PolicyContext(string ProjectRoot, ActiveQuest? ActiveQuest,
 
     /// <summary>Wert von <c>PATH</c> für die Auflösung eines nackten <c>monarch</c>; null: <c>$PATH</c> des Hook-Prozesses.</summary>
     public string? PathEnv { get; init; }
+
+    /// <summary>Startwurzel der Session (<c>CLAUDE_PROJECT_DIR</c>), unverändert durch EnterWorktree und cd; null: unbekannt (ADR-0020 §1, Q-0209).</summary>
+    public string? SessionRoot { get; init; }
 }
 
 /// <summary>Modus der Penalty Zone.</summary>

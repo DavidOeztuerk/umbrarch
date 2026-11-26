@@ -40,12 +40,55 @@ public class RegelnTextTests
         var all = Skill();
         Assert.Contains("Reihenfolge je Gate", all, StringComparison.Ordinal);
         var text = all[all.IndexOf("Reihenfolge je Gate", StringComparison.Ordinal)..];
-        string[] steps = ["Worktree anlegen", "EnterWorktree", "gate_plan", "quest accept", "quest start", "TDD", "quest submit", "commit", "PR", "quest pr", "Warden", "verdict", "gate merge", "gate check", "evidence sync", "ExitWorktree", "git worktree remove"];
+        Assert.DoesNotContain("EnterWorktree", text[..text.IndexOf("gate_plan", StringComparison.Ordinal)], StringComparison.Ordinal);
+        string[] steps = ["Owner legt die Gate-Worktree", "worktree add --no-track", "startet die Session dort", "gate carry", "gate_plan", "quest accept", "quest start", "TDD", "quest submit", "commit", "PR", "quest pr", "Warden", "verdict", "gate merge", "gate check", "evidence sync", "Owner führt im eigenen Terminal", "gate cleanup", "git worktree remove"];
         var positions = steps.Select(s => text.IndexOf(s, StringComparison.Ordinal)).ToArray();
         Assert.All(positions, p => Assert.True(p >= 0, "Checklistenschritt fehlt"));
         for (var i = 1; i < positions.Length; i++)
         {
             Assert.True(positions[i] > positions[i - 1], $"Schritt '{steps[i]}' steht nicht nach '{steps[i - 1]}'");
+        }
+    }
+
+    [Fact]
+    public void Cleanup_after_the_merge_runs_in_the_owner_terminal()
+    {
+        var text = Skill();
+        var start = text.IndexOf("**Aufräumen nach Merge und Clear", StringComparison.Ordinal);
+        Assert.True(start >= 0, "Aufräum-Regel fehlt");
+        var end = text.IndexOf("Nie `--force` vorschlagen", start, StringComparison.Ordinal);
+        Assert.True(end > start, "Ende der Aufräum-Regel fehlt");
+        var rule = text[start..end];
+        Assert.Contains("im eigenen Terminal", rule, StringComparison.Ordinal);
+        Assert.Contains("gate cleanup", rule, StringComparison.Ordinal);
+        Assert.DoesNotContain("ExitWorktree", rule, StringComparison.Ordinal);
+        Assert.DoesNotContain("ExitWorktree", text[text.IndexOf("Reihenfolge je Gate", StringComparison.Ordinal)..], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Local_tests_run_through_the_script_in_rules_and_knight()
+    {
+        Assert.Contains("scripts/test-local.sh", Skill(), StringComparison.Ordinal);
+        Assert.Contains("scripts/test-local.sh", File.ReadAllText(PluginFile("agents", "knight.md")), StringComparison.Ordinal);
+        var script = File.ReadAllText(Path.Combine(Path.GetDirectoryName(PluginFile("x"))!, "..", "scripts", "test-local.sh"));
+        Assert.Contains("for name in Domain Policy Infrastructure Cli", script, StringComparison.Ordinal);
+        Assert.Contains("--disable-build-servers -m:1 -nodeReuse:false", script, StringComparison.Ordinal);
+        foreach (var filter in new[] { "-method", "-class", "--filter", "-trait", "-notrait" })
+        {
+            Assert.DoesNotContain(filter, script, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void Knights_never_run_with_worktree_isolation()
+    {
+        foreach (var text in new[] { Skill(), File.ReadAllText(PluginFile("skills", "quest", "SKILL.md")) })
+        {
+            var line = text.Split('\n').FirstOrDefault(l => l.Contains("isolation: worktree", StringComparison.Ordinal));
+            Assert.NotNull(line);
+            Assert.Contains("Knight", line, StringComparison.Ordinal);
+            Assert.Contains("nie", line, StringComparison.Ordinal);
+            Assert.Contains("origin/HEAD", line, StringComparison.Ordinal);
         }
     }
 

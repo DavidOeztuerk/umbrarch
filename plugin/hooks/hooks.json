@@ -13,7 +13,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Read|Grep|Edit|Write|MultiEdit|NotebookEdit|Bash|mcp__.*",
+        "matcher": "Read|Grep|Edit|Write|MultiEdit|NotebookEdit|Bash|mcp__.*|Agent|Task|Glob|WebFetch|WebSearch",
         "hooks": [
           {
             "type": "command",

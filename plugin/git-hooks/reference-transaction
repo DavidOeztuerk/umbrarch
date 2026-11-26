@@ -1,0 +1,70 @@
+#!/bin/sh
+# Monarch, ADR-0020 §1, Schicht 2: Ref-Aenderungen in Claude-Code-Sitzungen verweigern, wenn sie refs/heads/develop
+# bzw. refs/heads/main betreffen oder (nur im Haupt-Checkout) die Ref HEAD bzw. die Branch, auf die HEAD zeigt.
+# Alles andere bleibt erlaubt (z. B. neue Branches, git worktree add -b, fetch). Reines POSIX-sh, ohne monarch-Binary.
+# Entscheidung nur im Zustand "prepared"; ohne CLAUDECODE (Terminal des Owners) bleibt alles erlaubt.
+# Zeilenformat auf stdin: "<alt> <neu> <ref-name>"; HEAD-/Symref-Aenderungen kommen als "<alt> ref:refs/heads/x HEAD"
+# bzw. "<alt> <sha> HEAD", der Ref-Name steht immer in der dritten Spalte.
+
+state="$1"
+
+# Stdin immer vollstaendig lesen (git schreibt sonst in eine geschlossene Pipe).
+# Ohne Beachtung der Schreibweise: auf macOS ist refs/heads/Develop dieselbe Datei wie refs/heads/develop.
+protected=0
+touches_head=0
+refs=""
+nl='
+'
+while read -r _old _new ref; do
+    lower=$(printf '%s\n' "$ref" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
+    case "$lower" in
+        refs/heads/develop | refs/heads/main) protected=1 ;;
+        head) touches_head=1 ;;
+    esac
+    refs="$refs$lower$nl"
+done
+
+[ "$state" = "prepared" ] || exit 0
+[ -n "${CLAUDECODE:-}" ] || exit 0
+
+deny() {
+    echo "Ref-Aenderung verweigert (ADR-0020 §1): refs/heads/develop|main, im Haupt-Checkout auch HEAD und dessen Branch. Arbeite in der Gate-Worktree." >&2
+    exit 1
+}
+
+[ "$protected" = 0 ] || deny
+
+gitdir=$(git rev-parse --git-dir 2>/dev/null) || deny
+common=$(git rev-parse --git-common-dir 2>/dev/null) || deny
+[ -n "$gitdir" ] && [ -n "$common" ] || deny
+gitdir=$(cd "$gitdir" 2>/dev/null && pwd -P) || deny
+common=$(cd "$common" 2>/dev/null && pwd -P) || deny
+[ -n "$gitdir" ] && [ -n "$common" ] || deny
+
+# Worktree: alles Weitere ist erlaubt.
+[ "$gitdir" = "$common" ] || exit 0
+
+# Haupt-Checkout: HEAD selbst verweigern. Ausnahme: git worktree add schreibt das HEAD der NEUEN Worktree in-process
+# aus dem Haupt-Checkout heraus (gleiche Zeile "ref:refs/heads/x HEAD", gleiches Arbeitsverzeichnis). Unterscheidbar nur
+# an den Lock-Dateien: Das Haupt-HEAD ist gesperrt ($common/HEAD.lock) oder eben nicht. Erlaubt wird nur, wenn das
+# Haupt-HEAD NICHT gesperrt ist und eine Worktree-HEAD gesperrt ist; sonst (auch unklar) verweigern.
+if [ "$touches_head" = 1 ]; then
+    [ ! -e "$common/HEAD.lock" ] || deny
+    locked=0
+    for f in "$common"/worktrees/*/HEAD.lock; do
+        [ -e "$f" ] && locked=1
+    done
+    [ "$locked" = 1 ] || deny
+fi
+
+# Branch, auf die HEAD zeigt (leer bei detached HEAD).
+branch=$(git symbolic-ref -q HEAD 2>/dev/null)
+if [ -n "$branch" ]; then
+    branch=$(printf '%s\n' "$branch" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
+    while IFS= read -r r; do
+        [ "$r" != "$branch" ] || deny
+    done <<EOF
+$refs
+EOF
+fi
+exit 0
