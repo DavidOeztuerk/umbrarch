@@ -13,5 +13,6 @@ scope:
   include: ["docs/adr/0020-selbst-aufraeumen.md", "plugin/README.md"]
   exclude: []
 estimate: { session_pct: 4, weekly_pct: 0.8, gold_usd: 0 }
+board: { pr: 163 }
 ---
 # ADR-0020 §1: vierte Runde, Edit-Regeln für <main>/.git, .git/.git in denyWrite, veraltete Sätze

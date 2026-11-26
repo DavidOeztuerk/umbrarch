@@ -13,5 +13,6 @@ scope:
   include: ["src/Monarch.Policy/ProtectMainCheckoutRule.cs", "src/Monarch.Cli/HookRunner.cs", "tests/Monarch.Policy.Tests/**", "tests/Monarch.Cli.Tests/**"]
   exclude: []
 estimate: { session_pct: 6, weekly_pct: 1.2, gold_usd: 0 }
+board: { pr: 163 }
 ---
 # Schicht 3: äußeres .git bestimmt das Repo, Worktree nur unter <common>/worktrees/<name>
