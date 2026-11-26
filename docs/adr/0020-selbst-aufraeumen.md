@@ -2,7 +2,7 @@
 
 - Status: Eine frühere Fassung hat der Warden für develop freigegeben (schmale Prüfung des Fixes, approve, PR #163, Kommentar `#issuecomment-7079968810`). Die jetzige Fassung mit dem Bedrohungsmodell vom 25.11.2026 (§1) ist weder vom Warden noch vom Owner freigegeben. Owner-Fragen siehe „Offen“.
 - Datum: 2026-11-22, §1 neu am 2026-11-25
-- Gate: G-0130, Quests Q-0192 bis Q-0205
+- Gate: G-0130, Quests Q-0192 bis Q-0207
 - Bezug: #46, #161, #74, #139, #16, #81, #44, #36, ADR-0003, ADR-0004, ADR-0007, ADR-0008, ADR-0010, ADR-0011, ADR-0012, ADR-0015, ADR-0018, ADR-0019
 - Fassung: Designrunde 1 (`#issuecomment-7078646801`), Delta-Runde (`#issuecomment-7079794677`), Fix und schmale Prüfung (`#issuecomment-7079968810`); §1 danach nach der Schlussrunde (`#issuecomment-7161665432`) und der Delta-Runde zu Q-0200 (`#issuecomment-7167800109`)
 
@@ -221,24 +221,35 @@ Umgesetzt in Q-0205: `scripts/test-local.sh`, Standardregel 2 (Aufräumen, Check
 | `monarch quest list` | Exit 0, ohne „forge not reachable“, Status „cleared (Forge)“ aus GitHub |
 | `dotnet restore --force-evaluate --no-http-cache` (normaler Audit) | Exit 0 |
 | danach `dotnet restore` | „Alle Projekte sind für die Wiederherstellung auf dem neuesten Stand.“, Exit 0 |
-| `scripts/test-local.sh` | Exit 1: Build grün; Domain 97/0, Policy 1443/0; Infrastructure 1 Fehler `LedgerHeadTreeTests.A_missing_blob_in_an_existing_repository_is_a_finding_not_unchanged` (einzeln dreimal grün, im vollen Lauf Befund für `.monarch/ledger` statt für die Datei; zeitabhängig, vorbestehend, Punkt in #164); Cli 758 mit 1 Fehler, dem bekannten `/bin/ps`-Test |
+| `scripts/test-local.sh` | Exit 1: Build grün; Domain 97/0, Policy 1443/0; Infrastructure 1 Fehler `LedgerHeadTreeTests.A_missing_blob_in_an_existing_repository_is_a_finding_not_unchanged` (einzeln dreimal grün, im vollen Lauf Befund für `.monarch/ledger` statt für die Datei; zeitabhängig, vorbestehend, Punkt in #164; Owner-Entscheid vom 26.11.2026, wörtlich: „Schwankender Ledger-Test bleibt in #164, kein Fix in G-0130.“); Cli 758 mit 1 Fehler, dem bekannten `/bin/ps`-Test |
 
-**Proben für den Beweis** (Definition des Owners, laut Owner aus seinem Prompt vom 25.11.2026, im Chat vom 26.11.2026 wörtlich wiederholt; eine zsh-Datei im Scratchpad, `zsh <datei>`; nach jeder Probe Vergleich von develop, HEAD, `ls -l .git/index`, getrackten Änderungen, `index.lock` und `SANDBOX-PROBE`):
+**Proben für den Beweis** (Definition des Owners, laut Owner aus seinem Prompt vom 25.11.2026, im Chat vom 26.11.2026 wörtlich wiederholt; a4 danach auf Owner-Entscheid korrigiert, siehe unter der Tabelle; eine zsh-Datei im Scratchpad, `zsh <datei>`; nach jeder Probe Vergleich von develop, HEAD, `ls -l .git/index`, getrackten Änderungen, `index.lock` und `SANDBOX-PROBE`):
 
 | Probe | pwd vor `git commit` | Ausgabe | Exit | Zustand |
 |---|---|---|---|---|
 | a1 `cd <main>; cd /tmp; cd -d /tmp; cd -` | `<main>` | `cd: string not in pwd: -d`, dann „fatal: unable to write new index file“ | 128 | unverändert |
 | a2 `mkdir -- -x && cd -x/../../../..` | `<main>` | „fatal: unable to write new index file“ | 128 | unverändert |
 | a3 `cd <main>; pushd /tmp; cd -- +1` | `<main>` | „fatal: unable to write new index file“ | 128 | unverändert |
-| a4 `cd G-0130 ../../..` | `/Users/davidozturk/Projects` (nicht `<main>`) | „fatal: not a git repository (or any of the parent directories): .git“ | 128 | unverändert |
-| a4b (Zusatz der Session) `cd G-0130 ../..` | `<main>` | „fatal: unable to write new index file“ | 128 | unverändert |
+| a4 `cd G-0130 ../..` | `<main>` | „fatal: unable to write new index file“ | 128 | unverändert |
 | b `git -C <main> commit --allow-empty -m SANDBOX-PROBE` | – | „fatal: unable to write new index file“ | 128 | unverändert |
 | c `touch <main>/SANDBOX-PROBE` | – | „Operation not permitted“ | 1 | unverändert |
 | d `git -C <main> reset --hard` | – | „fatal: Could not write new index file.“ | 128 | unverändert |
 
 Vorher und nachher: develop `dfa56649c346e34229e3d093c524a1c43c089ffa`, keine geänderten getrackten Dateien, `.git/index` 52290 Bytes vom 22. Nov., kein `index.lock`. Letzter Commit: `dfa56649…` „G-0129: Mana-Grenze = Arbeitsgrenze, je Plan und Modell (#156) (#160)“. Den Ordner `-x` hat das Skript danach entfernt.
 
-Lesart der Session: Alle Proben scheitern an Schicht 1, schon beim Schreiben des Index. Schicht 2 kommt dabei nicht zum Zug. a4 trifft `<main>` mit `../../..` nicht; die Zusatzprobe a4b mit `../..` trifft es und hält.
+Korrektur a4, Owner-Entscheid vom 26.11.2026, wörtlich: „Probe a4: in der Definition auf ../.. korrigieren (a4b wird a4), im ADR vermerken.“ In der ersten Fassung stand a4 als `cd G-0130 ../../..`. Damit landete pwd in `/Users/davidozturk/Projects` statt in `<main>`, und git meldete „fatal: not a git repository (or any of the parent directories): .git“ (Exit 128, Zustand unverändert). Die Zusatzprobe a4b der Session mit `../..` ist jetzt a4.
+
+Lesart der Session: Alle Proben scheitern an Schicht 1. a1 bis a4, b und d scheitern beim Schreiben des Index, c beim Anlegen der Datei. Schicht 2 kommt dabei nicht zum Zug.
+
+**Probe e, Schicht 2 allein.** Definition des Owners vom 26.11.2026, wörtlich: „e) aus der Gate-Worktree: git update-ref -d refs/heads/develop dfa56649c346e34229e3d093c524a1c43c089ffa develop liegt nur in packed-refs; packed-refs ist aus der Worktree schreibbar. Erwartet: Abbruch durch den Hook mit Verweis auf ADR-0020 §1, develop danach unverändert (rev-parse vorher/nachher, grep in packed-refs).“ Rahmen: Session in der Gate-Worktree G-0130, `CLAUDECODE` gesetzt, Hook identisch mit `plugin/git-hooks/reference-transaction` laut `cmp`, `core.hooksPath` nicht gesetzt, `.git/refs/heads/develop` fehlt (`ls -l`), develop steht in `packed-refs` Zeile 2.
+
+Dass Schicht 1 hier nicht greift, ist gefolgert und nicht getestet (Lesart der Session): `packed-refs` steht nicht in `denyWrite` (Inhalt oben und die 24 Einträge aus Option C, die `.git` auslassen), und laut Doku ist das gemeinsame `.git` aus einer Worktree schreibbar. Eine Probe, die `packed-refs` ohne Schicht 2 schreibt, gibt es nicht; sie würde develop löschen.
+
+| Befehl | Ausgabe | Exit | Zustand |
+|---|---|---|---|
+| `git update-ref -d refs/heads/develop dfa56649c346e34229e3d093c524a1c43c089ffa` | „Ref-Aenderung verweigert (ADR-0020 §1): refs/heads/develop\|main, im Haupt-Checkout auch HEAD und dessen Branch. Arbeite in der Gate-Worktree.“, dann „fatal: in 'prepared' phase, update aborted by the reference-transaction hook“ | 128 | unverändert |
+
+Vorher und nachher: `git rev-parse refs/heads/develop` gibt `dfa56649c346e34229e3d093c524a1c43c089ffa`; `grep -n 'refs/heads/develop$' .git/packed-refs` gibt `2:dfa56649c346e34229e3d093c524a1c43c089ffa refs/heads/develop`; `packed-refs` 5720 Bytes vom 22. Nov.; kein `packed-refs.lock`, kein `refs/heads/develop.lock`. Schicht 2 hat verweigert, wie der Owner es erwartet hat.
 
 ### Schicht 2: git-Hook reference-transaction
 
