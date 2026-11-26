@@ -7,7 +7,7 @@ description: Standardregeln für jede Session in einem Umbrarch-Projekt. Lesen v
 
 1. **Monarch zuerst:** Briefing lesen; vor jedem Schritt `monarch mana --estimate`. Am Limit: an einem sicheren Punkt Recap schreiben, stoppen und dem User sagen, ab wann es weitergeht.
 2. **Ein Gate** entspricht einem Branch `monarch/G-xxxx-<slug>` von `origin/develop`, **einer Worktree im Projekt** und einem PR nach `develop`.
-   - Anlegen: Der **Owner legt die Gate-Worktree im eigenen Terminal an** (`git -C <Haupt-Checkout> worktree add --no-track .claude/worktrees/<G-xxxx> -b monarch/G-xxxx-<slug> origin/develop`) und **startet die Session dort**. Die Session legt keine Worktree an (Owner 26.11.2026, ADR-0020 §1 „Gate öffnen mit Sandbox“). Braucht es ein neues Gate, nennt die Session dem Owner diesen Befehl.
+   - Anlegen: Der **Owner legt die Gate-Worktree im eigenen Terminal an**, aus dem Haupt-Checkout: `~/.monarch/bin/monarch gate open <G-xxxx> <slug>`. Der Befehl holt `origin`, legt `.claude/worktrees/<G-xxxx>` auf `monarch/G-xxxx-<slug>` von `origin/<integration_branch>` (in umbrarch `origin/develop`) ohne Upstream an (`--no-track`) und gibt nur den Pfad aus. Dann **startet der Owner die Session dort**. Die Session legt keine Worktree an; in einer Claude-Code-Session verweigert `gate open` (Owner 26.11.2026, ADR-0020 §1, ADR-0021 §2). Braucht es ein neues Gate, nennt die Session dem Owner diesen Befehl.
    - Ist `.claude/worktrees/` noch nicht ignoriert, trägt der Owner es zuerst in `.git/info/exclude` ein.
    - Den Haupt-Checkout nie auf einen anderen Branch umstellen, nie committen, nie anfassen. Der Hook verweigert dort schreibende Git-Befehle (`protect_main_checkout`); der Weg ist die Gate-Worktree.
    - In der Worktree vorher `git status` prüfen. Uncommittete Hook-Ledger-Zeilen nicht verwerfen; sie kommen mit dem ersten Commit mit, wenn `monarch ledger verify` ok ist.
@@ -61,7 +61,7 @@ description: Standardregeln für jede Session in einem Umbrarch-Projekt. Lesen v
 
 Je Gate in genau dieser Reihenfolge:
 
-1. Der Owner legt die Gate-Worktree im eigenen Terminal an (`git -C <Haupt-Checkout> worktree add --no-track …`) und startet die Session dort, dann `gate carry`.
+1. Der Owner legt die Gate-Worktree im eigenen Terminal an (`~/.monarch/bin/monarch gate open <G-xxxx> <slug>` aus dem Haupt-Checkout) und startet die Session dort, dann `gate carry`.
 2. `gate_plan` mit `project` = Worktree.
 3. `quest accept` und `quest start`, je Quest nacheinander (eine aktive Quest je Projekt).
 4. TDD: Test vorher rot, danach grün.

@@ -164,6 +164,13 @@ internal static class MonarchApp
         var gateCarry = new Command("carry", "Take the state of merged gates and their quests from refs/remotes/origin/monarch/G-* into this worktree: only the field state, only gates that exist here, no ledger files, no commit (main only).");
         gateCarry.SetAction(_ => GateCarryCommands.Carry(env));
         gate.Subcommands.Add(gateCarry);
+        var openId = new Argument<string>("id") { Description = "Gate id (G-0000)." };
+        var openSlug = new Argument<string>("slug") { Description = "Short slug for the branch monarch/<id>-<slug>." };
+        var gateOpen = new Command("open", "In the owner's own terminal: fetch origin and add the gate worktree .claude/worktrees/<id> on monarch/<id>-<slug> from origin/<integration branch> without upstream; prints only its path.");
+        gateOpen.Arguments.Add(openId);
+        gateOpen.Arguments.Add(openSlug);
+        gateOpen.SetAction(r => GateOpenCommands.Open(env, r.GetValue(openId)!, r.GetValue(openSlug)!));
+        gate.Subcommands.Add(gateOpen);
         root.Subcommands.Add(gate);
 
         var next = new Option<string?>("--next") { Description = "The next concrete step." };

@@ -3,7 +3,7 @@ id: Q-0216
 gate: G-0131
 kind: main
 rank: A
-state: in_progress
+state: in_review
 dod:
   - "Design zuerst: ADR-0021 §1 mit den Owner-Entscheiden vom 26.11.2026 wörtlich; schmale Warden-Design-Runde nur über §1 mit approve vor dem ersten Code-Commit, höchstens eine Delta-Runde"
   - "R3: .monarch/system.yaml:30-31 (evidence.required mit build-test (ubuntu-latest), plugin, aot (linux-x64)) vom Owner eingetragen, lesend geprüft und mit Q-0216 committet"
