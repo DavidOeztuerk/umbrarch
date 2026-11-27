@@ -3,7 +3,7 @@ id: Q-0222
 gate: G-0132
 kind: main
 rank: A
-state: proposed
+state: abandoned
 dod:
   - "Roter Test zuerst: Inline-Code liest ~/.claude/projects/x.jsonl -> erlaubt"
   - "Wächter: Inline-Code mit ~/.claude/settings.json, ~/.claude/plugins/x, .claude/settings.local.json, .monarch/ledger bleibt Deny"

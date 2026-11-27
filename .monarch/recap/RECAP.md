@@ -1,10 +1,10 @@
 # RECAP
 
 ## Stand
-- Zeitpunkt: 2026-11-27T01:55:01Z
+- Zeitpunkt: 2026-11-27T09:45:02Z
 - Plan: Pro
-- Mana 5h: 57% (Limit 90%, Reset 2026-11-27T04:00:00Z)
-- Mana 7d: 81% (Limit 96%, Reset 2026-12-02T11:00:00Z)
+- Mana 5h: 0% (Limit 90%, Reset 2026-11-27T14:40:00Z)
+- Mana 7d: 83% (Limit 96%, Reset 2026-12-02T11:00:00Z)
 - Limits: 5h 90%, 7d 96% (plan default)
 
 ## Aktiv
@@ -60,7 +60,7 @@
 - Q-0150: Heikle Quest nach Standardregel 3: Warden-Runde über das Design vor dem Code, kein src-Code, kein anderer Test und keine andere Schwelle aufgeweicht, Schlussrunde des Wardens mit Verdict am Head-SHA
 
 ## Nächster konkreter Schritt
-Fix A umgesetzt (uncommittet): ToolSecretExceptions (.env.sample/.env.template) nur Read/Grep, Bash wie vor Q-0220; Policy 1692/1692. Kommentare #176, #104 (Milestone Phase 1+) gepostet. ADR-Diff A liegt dem Owner vor; Frage Q-0222: move-quest braucht Zielgate, sonst quest abandon. Danach schmale Warden-Prüfung Fix A, Q-0221 TDD, Warden-Schlussrunde PR #178.
+PR #178 Head 2f2ef98: Warden-Schlussrunde approve (Review https://github.com/DavidOeztuerk/umbrarch/pull/178#issuecomment-7207898529), CI grün. gate verdict verweigert: Q-0222 proposed, Monarch verlangt in_review. Owner-Frage: Weg für Q-0222 (accept+abandon, move-quest in neues Gate, oder submit). Danach gate verdict, Merge nur mit Owner-Freigabe.
 
 ## Offene Entscheidungen
-- KORREKTUR: Q-0222 ist NICHT abandoned. monarch quest abandon verweigert 'Invalid transition from Proposed to Abandoned'; Q-0222 bleibt proposed, Owner-Frage offen (accept+abandon oder anderer Weg).
+- Q-0222 abandoned (accept, dann abandon; Owner 27.11.2026): Lockerung bei Bash-Text, gleiche Ebene wie ADR-0022 §5; weiter in #104 (Phase 1+), Owner-Entscheid 27.11.2026. Ersetzt die beiden vorigen Notizen zu Q-0222.
