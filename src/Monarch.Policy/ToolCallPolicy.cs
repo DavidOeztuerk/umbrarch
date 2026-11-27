@@ -39,14 +39,14 @@ public static partial class ToolCallPolicy
 
     /// <summary>
     /// Bash-Kommandowörter, die als eindeutig lesend gelten (Heuristik, bewusst klein): ls cat head tail less more grep rg wc stat pwd echo
-    /// printf which whoami date diff file tree du df sort uniq cut jq test [ true false cd basename dirname realpath sed awk (ohne -i), find
+    /// printf which whoami date diff file tree du df sort uniq cut jq test [ true false cd basename dirname realpath readlink sed awk (ohne -i), find
     /// (ohne -delete/-exec) sowie die Git-Unterkommandos status log diff show rev-parse ls-files check-ignore blame describe ls-tree rev-list
     /// shortlog grep. Alles andere, jede Umleitung nach <c>&gt;</c> (außer /dev/null und Dateideskriptoren) und unbekannte Kommandos gelten als mutierend.
     /// </summary>
     private static readonly string[] ReadOnlyWords =
         ["ls", "cat", "head", "tail", "less", "more", "grep", "rg", "wc", "stat", "pwd", "echo", "printf", "which", "whoami", "date", "diff",
          "file", "tree", "du", "df", "sort", "uniq", "cut", "jq", "test", "[", "true", "false", "cd", "basename", "dirname", "realpath",
-         "sed", "awk", "find"];
+         "readlink", "sed", "awk", "find"];
 
     private static readonly string[] ReadOnlyGit =
         ["status", "log", "diff", "show", "rev-parse", "ls-files", "check-ignore", "blame", "describe", "ls-tree", "rev-list", "shortlog", "grep"];
@@ -376,12 +376,12 @@ public static partial class ToolCallPolicy
     private static PolicyDecision? ProtectSecrets(ToolCall call, PolicyContext ctx, List<BashAnalysis.Segment> segments, Canon paths)
     {
         if (call.ToolName == "Read" && call.FilePath is { } fp)
-            return IsSecret(ctx, paths.Rel(fp))
+            return IsSecret(ctx, paths.Rel(fp), tool: true)
                 ? PolicyDecision.Deny(PolicyRules.ProtectSecrets, "Credential-Dateien liest Monarch nie. Nutze Existenz-Prüfungen (ls, test) oder frage den Guild Master.")
                 : null;
         if (call.ToolName == "Grep")
         {
-            var deniedPath = call.FilePath is { Length: > 0 } gp && IsSecret(ctx, paths.Rel(gp));
+            var deniedPath = call.FilePath is { Length: > 0 } gp && IsSecret(ctx, paths.Rel(gp), tool: true);
             if (deniedPath || (call.Glob is { Length: > 0 } glob && GlobTargetsSecret(ctx, glob)))
                 return PolicyDecision.Deny(PolicyRules.ProtectSecrets, "Grep liest Dateiinhalte: Credential-Dateien (Pfad oder Glob) sind tabu. Nutze Glob für Namen oder frage den Guild Master.");
             return null;
@@ -420,7 +420,7 @@ public static partial class ToolCallPolicy
             if (GlobMatcher.WildcardMatch(name, sName.Replace("*", "x", StringComparison.Ordinal))
                 || GlobMatcher.WildcardMatch(name, sName.Replace(".*", "", StringComparison.Ordinal).Replace("*", "", StringComparison.Ordinal))
                 || (sName.Contains('*', StringComparison.Ordinal) && GlobMatcher.WildcardMatch(sName, name.Replace("*", "x", StringComparison.Ordinal))))
-                return !MatchesAny(ctx.Options.SecretExceptions, name);
+                return !MatchesAny(ctx.Options.SecretExceptions, name) && !MatchesAny(ctx.Options.ToolSecretExceptions, name);
         }
 
         return false;
@@ -429,9 +429,10 @@ public static partial class ToolCallPolicy
     private static bool IsSecretToken(PolicyContext ctx, Canon paths, string token) =>
         !token.StartsWith('-') && paths.RelAll(token).Any(rel => rel.Length > 0 && IsSecret(ctx, rel));
 
-    private static bool IsSecret(PolicyContext ctx, string rel)
+    private static bool IsSecret(PolicyContext ctx, string rel, bool tool = false)
     {
         if (MatchesAnyCI(ctx.Options.SecretExceptions, rel)) return false;
+        if (tool && MatchesAnyCI(ctx.Options.ToolSecretExceptions, rel)) return false;
         return MatchesAnyCI(PolicyOptions.DefaultSecretGlobs, rel) || MatchesAnyCI(ctx.Options.ExtraSecretGlobs, rel);
     }
 

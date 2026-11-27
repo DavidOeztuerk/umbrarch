@@ -1,14 +1,14 @@
 # RECAP
 
 ## Stand
-- Zeitpunkt: 2026-11-26T15:57:00Z
+- Zeitpunkt: 2026-11-27T01:55:01Z
 - Plan: Pro
-- Mana 5h: 91% (Limit 90%, Reset 2026-11-26T16:50:00Z)
-- Mana 7d: 61% (Limit 96%, Reset 2026-12-02T11:00:00Z)
+- Mana 5h: 57% (Limit 90%, Reset 2026-11-27T04:00:00Z)
+- Mana 7d: 81% (Limit 96%, Reset 2026-12-02T11:00:00Z)
 - Limits: 5h 90%, 7d 96% (plan default)
 
 ## Aktiv
-- Gate G-0131 · Quest Q-0216 [A] · Phase in_progress
+- keine aktive Quest
 
 ## Erledigt
 - Q-0113 [A] cleared: Merge-Policy nach Zielbranch - https://github.com/DavidOeztuerk/umbrarch/pull/15 - Evidence: https://github.com/DavidOeztuerk/monarch/actions/runs/40721744761/job/122946762702, https://github.com/DavidOeztuerk/monarch/actions/runs/40721744761/job/122946762600, https://github.com/DavidOeztuerk/monarch/actions/runs/40721744761/job/122943422084, https://github.com/DavidOeztuerk/monarch/actions/runs/40721744761/job/122943425111, https://github.com/DavidOeztuerk/monarch/actions/runs/40721758194/job/122934234801, https://github.com/DavidOeztuerk/monarch/pull/15
@@ -40,6 +40,9 @@
 - Q-0213 [A] cleared: Schicht 3: äußeres .git bestimmt das Repo, Worktree nur unter <common>/worktrees/<name> - https://github.com/DavidOeztuerk/umbrarch/pull/163
 - Q-0214 [A] cleared: ADR-0020 §1: vierte Runde, Edit-Regeln für <main>/.git, .git/.git in denyWrite, veraltete Sätze - https://github.com/DavidOeztuerk/umbrarch/pull/163
 - Q-0215 [A] cleared: ADR-0020 §1: Ergebnisse der Proben j bis l nach der Aktivierung - https://github.com/DavidOeztuerk/umbrarch/pull/163
+- Q-0216 [A] cleared: develop grün für gate merge: R1 Nachtläufe zählen nicht, R3 evidence.required (#167) - https://github.com/DavidOeztuerk/umbrarch/pull/168
+- Q-0217 [B] cleared: monarch gate open <G> <slug> (#166) - https://github.com/DavidOeztuerk/umbrarch/pull/168
+- Q-0218 [A] cleared: Versionspflicht für plugin/ und Version 0.1.3 - https://github.com/DavidOeztuerk/umbrarch/pull/168
 
 ## Offen
 - Q-0148: Design zuerst (einfache Sprache, im PR): docs/adr/0015-relatives-latenz-gate.md. Die CI misst auf demselben Runner, verschränkt in Blöcken (Bezug und Szenario abwechselnd), den reinen Programmstart `monarch --version` als Bezug und gatet je Szenario den Aufschlag des Hooks auf diesen Bezug am Median (p50); der Bezug läuft im selben Modus wie das Szenario (direkt: Binary, Wrapper: plugin/scripts/monarch). Das ADR nennt, dass `--version` über System.CommandLine läuft und der Hook es umgeht (src/Monarch.Cli/MonarchApp.cs:12-28), misst diesen Unterschied und begründet den Bezug; ein anderer Bezug nur nach Owner-Entscheid. Der Aufschlag ist so definiert, dass ein gleichmäßig langsamerer Runner ihn nicht verschiebt (gemessen: in-scope p50 5,67 ms in Lauf 41938370015 gegen 8,27 ms in Lauf 42218379672; Verhältnis denied-bash/in-scope stabil 1,55-1,70). Schwelle je Szenario aus gemessenen Läufen (Zahlen und Run-IDs, beide OS, direkt und Wrapper), nicht geschätzt; denied-bash und out-of-scope tragen den Ledger-Append nach der geflushten Entscheidung (HookRunner.cs:199-222). Nachweis, dass ein echter Regress auffällt (z. B. ein zusätzlicher Prozessstart auf dem heißen Pfad). Eine Warden-Design-Runde plus höchstens eine Delta-Runde, Verdict vor dem ersten Code-Commit
@@ -55,16 +58,9 @@
 - Q-0150: bench/test-gate.sh erweitert, vorher rot, danach grün, deterministisch über BENCH_RESULTS_DIR: knapp unter den C1-Schwellen grün, knapp darüber rot je Klasse; Schwellen nicht über die Umgebung anhebbar; auf einem anderen Betriebssystem Exit 2; alle bestehenden Prüfungen unverändert grün
 - Q-0150: Verweise: der Kommentar zu C1 in .github/workflows/ci.yml nennt die Bedingung ruhige Maschine und den Nachtrag; docs/lessons.md bekommt einen kurzen Nachtrag; die CI-Schritte selbst ändern sich nicht
 - Q-0150: Heikle Quest nach Standardregel 3: Warden-Runde über das Design vor dem Code, kein src-Code, kein anderer Test und keine andere Schwelle aufgeweicht, Schlussrunde des Wardens mit Verdict am Head-SHA
-- Q-0216: Design zuerst: ADR-0021 §1 mit den Owner-Entscheiden vom 26.11.2026 wörtlich; schmale Warden-Design-Runde nur über §1 mit approve vor dem ersten Code-Commit, höchstens eine Delta-Runde
-- Q-0216: R3: .monarch/system.yaml:30-31 (evidence.required mit build-test (ubuntu-latest), plugin, aot (linux-x64)) vom Owner eingetragen, lesend geprüft und mit Q-0216 committet
-- Q-0216: R1: CheckCi zählt keine Checks aus Workflow-Läufen mit event schedule, auch nicht laufende; das Event kommt aus GET actions/runs?head_sha über check_suite.id; scheitert die Abfrage, verweigern quest verify und gate merge (fail-closed); R2 wird nicht gebaut (Owner-Entscheid 2)
-- Q-0216: Tests vorher rot, danach grün (ADR-0021 §1 Tests 1-7): Fall aus #167 nur mit R1 und mit R3; roter Pflicht-Check nur im Nachtlauf; Push rot und Nachtlauf grün bleibt rot; Pflicht-Check nur im Nachtlauf ist Pending; roter Check außerhalb der Liste blockiert nicht; actions/runs-Fehler verweigert; Forge.Required liest die drei Namen aus der Fluss-Liste
-- Q-0216: Heikle Quest (Merge-Schutzregel): kein anderer Test und keine Schwelle aufgeweicht; bestehende Tests unverändert grün über scripts/test-local.sh; Fake in Part2Support.cs liefert für actions/runs im Default eine leere Liste
 
 ## Nächster konkreter Schritt
-Wie vorher (nichts committet, Code+Tests+ADR uncommittet). Owner-Antworten 26.11. (Chat): 1) ci.yml-Schritt im Job plugin für Q-0218 erlaubt, 'unverändert' meinte nur macOS/Nachtlauf. 2) R3 für alle Aufrufer so lassen; Beleg main-Protection: gh api .../branches/main/protection/required_status_checks contexts = build-test (macos-latest), build-test (ubuntu-latest), plugin, aot (linux-x64) -> main verlangt build-test macOS, aber NICHT aot (osx-arm64): im ADR §1 Folgen genau so benennen (aot osx-arm64 ist Lücke, nichts bauen). 3) Fix-PR-Regel nicht bauen, Issue am Ende. 4) Issue: Deadline-Test ForgeClearViewTests wackelt unter Last. Ablauf nach Reset 16:50 UTC: Kritiker nur Delta seit letzter Runde (R4-Rücknahme, Offen 3, main-Beleg), Commit ADR+system.yaml+.monarch, push Refspec, PR ready, quest pr, Warden-Design §1 (unabhängig vom Code), nach approve Code+Tests; dann Q-0217, Q-0218 (vorher gate_plan mit tests/Monarch.Cli.Tests/** in Q-0218). Am Ende Issues: jq-Fehlalarm, Fix-PR-Regel, Deadline-Test. Nicht mergen ohne Owner.
+Fix A umgesetzt (uncommittet): ToolSecretExceptions (.env.sample/.env.template) nur Read/Grep, Bash wie vor Q-0220; Policy 1692/1692. Kommentare #176, #104 (Milestone Phase 1+) gepostet. ADR-Diff A liegt dem Owner vor; Frage Q-0222: move-quest braucht Zielgate, sonst quest abandon. Danach schmale Warden-Prüfung Fix A, Q-0221 TDD, Warden-Schlussrunde PR #178.
 
 ## Offene Entscheidungen
-- Owner: Gilt 'ci.yml unverändert' (Entscheid 4) auch für den Versions-Schritt im Job plugin (Q-0218)? Gefragt im Chat 26.11.
-- Owner: R3 auch für quest verify, PR-Head, gate check, quest list (ADR-0021 Offen 2)? Default so lassen (Vorschlag)
-- Owner: Rot vor fehlend (Fix-PR-Weg bei rotem build-test mit R3) ist eine Lockerung (ADR-0021 Offen 3)? Default nicht bauen, Issue (Vorschlag)
+- KORREKTUR: Q-0222 ist NICHT abandoned. monarch quest abandon verweigert 'Invalid transition from Proposed to Abandoned'; Q-0222 bleibt proposed, Owner-Frage offen (accept+abandon oder anderer Weg).
