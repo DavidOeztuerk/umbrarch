@@ -13,5 +13,6 @@ scope:
   exclude: []
 estimate: { session_pct: 15, weekly_pct: 3, gold_usd: 0 }
 boss: "Policy-Tests grün, alle Wächter weiter Deny"
+board: { pr: 178 }
 ---
 # Fehlalarme #66 und #169: Suchmuster und jq-Ausdruck sind keine Pfade (erst nach aktiver Sperre)

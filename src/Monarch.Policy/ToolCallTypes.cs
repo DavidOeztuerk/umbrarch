@@ -100,7 +100,12 @@ public sealed record PolicyOptions
     public IReadOnlyList<string> ExtraSecretGlobs { get; init; } = [];
 
     /// <summary>Ausnahmen vom Secret-Schutz.</summary>
-    public IReadOnlyList<string> SecretExceptions { get; init; } = ["**/.env.example", "**/.env.sample", "**/.env.template"];
+    public IReadOnlyList<string> SecretExceptions { get; init; } = ["**/.env.example"];
+
+    /// <summary>
+    /// Ausnahmen nur für das Read- und das Grep-Werkzeug (ADR-0022 §5): In Bash könnte die Shell einen Vorlagennamen noch per Glob zu anderen Dateien ausdehnen.
+    /// </summary>
+    public IReadOnlyList<string> ToolSecretExceptions { get; init; } = ["**/.env.sample", "**/.env.template"];
 
     /// <summary>Verbotene Bash-Muster (<c>*</c>-Glob gegen jedes Kommando-Segment).</summary>
     public IReadOnlyList<string> DenyBash { get; init; } =

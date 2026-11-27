@@ -376,12 +376,12 @@ public static partial class ToolCallPolicy
     private static PolicyDecision? ProtectSecrets(ToolCall call, PolicyContext ctx, List<BashAnalysis.Segment> segments, Canon paths)
     {
         if (call.ToolName == "Read" && call.FilePath is { } fp)
-            return IsSecret(ctx, paths.Rel(fp))
+            return IsSecret(ctx, paths.Rel(fp), tool: true)
                 ? PolicyDecision.Deny(PolicyRules.ProtectSecrets, "Credential-Dateien liest Monarch nie. Nutze Existenz-Prüfungen (ls, test) oder frage den Guild Master.")
                 : null;
         if (call.ToolName == "Grep")
         {
-            var deniedPath = call.FilePath is { Length: > 0 } gp && IsSecret(ctx, paths.Rel(gp));
+            var deniedPath = call.FilePath is { Length: > 0 } gp && IsSecret(ctx, paths.Rel(gp), tool: true);
             if (deniedPath || (call.Glob is { Length: > 0 } glob && GlobTargetsSecret(ctx, glob)))
                 return PolicyDecision.Deny(PolicyRules.ProtectSecrets, "Grep liest Dateiinhalte: Credential-Dateien (Pfad oder Glob) sind tabu. Nutze Glob für Namen oder frage den Guild Master.");
             return null;
@@ -420,7 +420,7 @@ public static partial class ToolCallPolicy
             if (GlobMatcher.WildcardMatch(name, sName.Replace("*", "x", StringComparison.Ordinal))
                 || GlobMatcher.WildcardMatch(name, sName.Replace(".*", "", StringComparison.Ordinal).Replace("*", "", StringComparison.Ordinal))
                 || (sName.Contains('*', StringComparison.Ordinal) && GlobMatcher.WildcardMatch(sName, name.Replace("*", "x", StringComparison.Ordinal))))
-                return !MatchesAny(ctx.Options.SecretExceptions, name);
+                return !MatchesAny(ctx.Options.SecretExceptions, name) && !MatchesAny(ctx.Options.ToolSecretExceptions, name);
         }
 
         return false;
@@ -429,9 +429,10 @@ public static partial class ToolCallPolicy
     private static bool IsSecretToken(PolicyContext ctx, Canon paths, string token) =>
         !token.StartsWith('-') && paths.RelAll(token).Any(rel => rel.Length > 0 && IsSecret(ctx, rel));
 
-    private static bool IsSecret(PolicyContext ctx, string rel)
+    private static bool IsSecret(PolicyContext ctx, string rel, bool tool = false)
     {
         if (MatchesAnyCI(ctx.Options.SecretExceptions, rel)) return false;
+        if (tool && MatchesAnyCI(ctx.Options.ToolSecretExceptions, rel)) return false;
         return MatchesAnyCI(PolicyOptions.DefaultSecretGlobs, rel) || MatchesAnyCI(ctx.Options.ExtraSecretGlobs, rel);
     }
 

@@ -74,14 +74,31 @@ public class Q0220SecretPatternTests
         Assert.Matches(@"^\*\*/\*\.key$", PolicyOptions.DefaultSecretGlobs.Single(g => g.EndsWith(".key", StringComparison.Ordinal)));
     }
 
-    // Vorlagen (Owner-Antwort zu Probe i): .env.sample und .env.template sind lesbar wie .env.example
+    // Vorlagen (Owner-Antwort zu Probe i): .env.sample und .env.template sind für das Read- und das Grep-Werkzeug lesbar
     [Theory]
     [InlineData(".env.sample"), InlineData("app/.env.template"), InlineData("/home/u/p/.env.sample")]
-    public void Templates_are_readable(string path)
+    public void Templates_are_readable_with_read_and_grep_tools(string path)
     {
         Allowed(new ToolCall("Read", FilePath: path));
-        Allowed(ToolCallPolicyTests.Bash("cat " + path));
         Allowed(new ToolCall("Grep", FilePath: path));
+    }
+
+    // Owner 27.11. (Fix A): in Bash gilt die Vorlagen-Ausnahme nicht; zsh-Globs wie .env.sample(|.bak) lesen sonst andere Dateien
+    [Theory]
+    [InlineData("cat .env.sample"), InlineData("cat app/.env.template"), InlineData("cat /home/u/p/.env.sample")]
+    [InlineData("cat .env.sample(|.bak)"), InlineData("cat .env.template<->"), InlineData("rg x .env.sample(|.prod)")]
+    [InlineData("grep x .env.sample(|.local)"), InlineData("cat .env.sample(|.local)(N)"), InlineData("grep x .env.sample.local")]
+    public void Templates_stay_denied_in_bash(string cmd) => DeniedBySecrets(ToolCallPolicyTests.Bash(cmd));
+
+    // Grep-Glob: die Vorlage selbst ist frei, ein Glob, der weitere Namen treffen kann, nicht
+    [Theory]
+    [InlineData(".env.sample", true), InlineData(".env.template", true)]
+    [InlineData(".env.sample*", false), InlineData(".env.s*", false)]
+    public void Grep_glob_on_templates(string glob, bool allowed)
+    {
+        var call = new ToolCall("Grep", FilePath: ".", Glob: glob);
+        if (allowed) Allowed(call);
+        else DeniedBySecrets(call);
     }
 
     // Wächter aus ADR-0022 §5 und weitere: Dateioperanden bleiben Deny
