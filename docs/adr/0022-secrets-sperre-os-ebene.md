@@ -1,6 +1,6 @@
 # ADR-0022: Lese-Sperre für Secrets auf OS-Ebene (G-0132)
 
-- Status: Entwurf mit Owner-Entscheiden vom 26.11.2026 (unten). Weder vom Owner noch vom Warden freigegeben.
+- Status: Vom Owner freigegeben am 26.11.2026 (Stand 9e6d6c3, dazu die Änderungen nach der Warden-Design-Runde zu §5, Restrisiko und §3, ebenfalls am 26.11.2026). Warden: Design- und Delta-Runde request_changes zu §5; schmale Prüfung des ersten Fixes request_changes (zsh-Glob); Owner-Entscheid B vom 27.11.2026 (Quote-Zustand); schmale Prüfung von B request_changes (eval, bash -c); Owner-Entscheid C vom 27.11.2026 (verschachtelte Segmente streng); schmale Prüfung von C request_changes (sudo -s/-i); schmale Prüfung der Minimal-Variante request_changes (Backtick-Ende, GREP_OPTIONS); Owner-Entscheid vom 27.11.2026: Lockerung entfällt (§5).
 - Datum: 2026-11-26
 - Gate: G-0132, Quest Q-0219
 - Bezug: #173, danach #66 und #169; ADR-0011 (Regeln), ADR-0020 §1 (Sandbox in den User-Settings, Hook nur Frühwarnung)
@@ -40,7 +40,7 @@ Heute schützt nur der Hook die Credential-Dateien. Er rät aus dem Text eines B
 
 ## 1. Welche Pfade
 
-Abgeleitet aus der heutigen Prüfung `protect_secrets`:
+Abgeleitet aus der Prüfung `protect_secrets` (Stand 9e6d6c3, vor Q-0220):
 
 - Eingebaute Globs, `src/Monarch.Policy/ToolCallTypes.cs:125-126`: `**/.env`, `**/.env.*`, `**/*.key`, `**/*.p8`, `**/*.pfx`, `**/keycloak.env`, `**/.netrc`, `**/id_rsa*`.
 - Ausnahme, `ToolCallTypes.cs:103`: `**/.env.example`.
@@ -106,7 +106,8 @@ Im eigenen Terminal ausführen. Der Befehl legt zuerst ein Backup an, ergänzt n
       "~/**/keycloak.env", "~/**/.netrc", "~/**/id_rsa*",
       "~/.umbrarch-probe/canary.txt"]'
   B="$S.bak-$(date +%Y%m%d-%H%M%S)"
-  cp -p "$S" "$B" && echo "Backup: $B"
+  cp -p "$S" "$B"
+  echo "Backup: $B"
   T="$(mktemp "$S.XXXXXX")"; trap 'rm -f "$T"' EXIT
   jq --argjson p "$P" '
     def addu($n): reduce $n[] as $e (.; if any(.[]; . == $e) then . else . + [$e] end);
@@ -168,7 +169,7 @@ Die Session führt sie nach der Aktivierung aus und trägt die Ergebnisse hier e
 
 Grenze der Proben: Für die Globs der Read-Regel gibt es keine Probe ohne Hook, weil der Hook jeden Namen der Liste ebenfalls sperrt. Probe d belegt die Read-Regel nur für den festen Pfad `canary.txt`. Probe e zeigt, welche Schicht zuerst antwortet. Die Globs selbst belegt Probe a für `denyRead`.
 
-Bestanden ist die Sperre, wenn a, a2, c, d, n, o, o2 und p sperren und b, f, h, i, j, k, l und m laufen. Erst dann beginnt Q-0220 (Lockerung für #66 und #169). Sperren n oder o nicht, stoppt die Session und legt dem Owner die Frage F4 vor; die Sperre gilt dann nicht als belegt. Nach den Proben löscht die Session `W`. `W` ist nicht von git ignoriert. Bis `W` gelöscht ist, gibt es darum kein `git add -A` und kein `git add .`, nur `git add` mit genannten Pfaden.
+Bestanden ist die Sperre, wenn a, a2, c, d, n, o, o2 und p sperren und b, f, h, i, j, k, l und m laufen. Erst dann beginnt Q-0220 (geplant als Lockerung für #66 und #169; sie entfällt, siehe §5). Sperren n oder o nicht, stoppt die Session und legt dem Owner die Frage F4 vor; die Sperre gilt dann nicht als belegt. Nach den Proben löscht die Session `W`. `W` ist nicht von git ignoriert. Bis `W` gelöscht ist, gibt es darum kein `git add -A` und kein `git add .`, nur `git add` mit genannten Pfaden.
 
 Ergebnisse vom 26.11.2026 (Session nach der Aktivierung; Settings geprüft mit `jq` auf `~/.claude/settings.json`: je 14 Einträge in `denyRead` und als `Read(...)` in `permissions.deny`, `sandbox.enabled` true, `allowUnsandboxedCommands` false, keine `excludedCommands`):
 
@@ -212,14 +213,14 @@ Bewertung (Zusammenfassung, kein Owner-Zitat): Kein Inhalt kam durch; jede Probe
 
 Aufräumen: `rm -r W` entfernte die Symlinks `sl.txt` und `sym.txt`. Bei `.env`, `.env.local` und `.env.production` meldete es `Operation not permitted`, bei `W` selbst `Directory not empty`. Die Sandbox sperrt also auch das Löschen von Dateien aus der Liste. `W` löscht der Owner im eigenen Terminal; bis dahin gilt weiter nur `git add` mit genannten Pfaden.
 
-## 5. Danach: Lockerung des Hooks (Q-0220, nur Skizze für die Warden-Runde)
+## 5. Lockerung des Hooks: Verzicht (Q-0220)
 
-- Grundsatz: Ausgenommen wird genau ein Token, das Muster bzw. der Filter. Kommt im Segment eine Option vor, die nicht auf einer festen Liste steht (auch zusammengezogene Kurzoptionen wie `-ef`, und Optionen mit Wert wie `rg -g`/`--glob`/`--iglob`), gilt die heutige strenge Prüfung aller Tokens.
-- #66, `grep` und `rg`: Ohne `-e`/`--regexp` und ohne `-f`/`--file` ist das erste Argument ohne Option das Muster und kein Pfad. Mit `-e`/`--regexp` ist nur dessen Wert das Muster, und jedes Argument ohne Option ist eine Datei. Werte von `-f`/`--file` sind Dateien. Alle Dateien werden weiter geprüft.
-- #169, `jq`: Ohne `-f`/`--from-file` ist das erste Argument ohne Option der Filter und kein Pfad. Mit `-f`/`--from-file` gibt es keinen ausgenommenen Filter. Werte von `--rawfile` und `--slurpfile` sind Dateien; Werte von `--arg` und `--argjson` werden weiter geprüft. Vermutung zur Ursache, noch nicht per Test belegt: Nicht `~/.claude/plugins/*.json` trifft, sondern `.key` im Ausdruck `select(.key|test(...))` trifft den Glob `**/*.key`. Der rote Test in Q-0220 klärt das. Eine Ausnahme für `~/.claude/plugins` ist nicht geplant.
-- Wächter (bleiben Deny): `grep foo .env`, `grep -f .env x`, `grep foo x .env`, `grep -e x .env`, `grep --regexp=x .env`, `grep --file=.env x`, `grep -ef .env x`, `rg -f .env x`, `rg -g .env x`, `jq . .env`, `jq -f p.jq .env`, `jq --from-file=.env`, `jq --rawfile a .env -n 1`, `jq --slurpfile a .env -n 1`, `cat ~/.netrc`.
+- Entscheid (Owner, 27.11.2026): Die Lockerung für Suchmuster von grep und rg (#66) und für jq-Filter (#169) entfällt. Auf Hook-Ebene ist sie mit Text-Parsing nicht sicher zu machen: In sechs Warden-Runden fand sich je eine neue Umgehung (Optionen hinter dem ersten Operanden mit POSIXLY_CORRECT und „--“; Expansion und Glob im Muster; zsh-Alternation (a|b) und <->; eval und sh/bash/zsh -c; sudo -s/-i; Backtick-Ende in einfachen Quotes und die Options-Variablen GREP_OPTIONS und RIPGREP_CONFIG_PATH). Das ist dieselbe Ebene wie der Owner-Entscheid vom 25.11.2026: Der Hook bleibt Frühwarnung, der Schutz liegt bei der OS-Sperre (§1 bis §4).
+- protect_secrets bleibt für grep, rg und jq so streng wie vor Q-0220: Jedes Token wird geprüft, auch Muster und Filter. #66 und #169 bleiben offen; der Rest steht in #177.
+- Ursache #169, per Test belegt (`Cause_169_is_the_key_token_in_the_filter_not_the_plugin_path`): Nicht `~/.claude/plugins/*.json` trifft, sondern `.key` im Ausdruck `select(.key|test(...))` trifft den Glob `**/*.key`.
+- Wächter (Deny, als Tests in `tests/Monarch.Policy.Tests/Q0220SecretPatternTests.cs`, darunter jede Umgehung aus den Warden-Runden): `grep foo .env`, `grep -f .env x`, `grep foo x .env`, `grep -e x .env`, `grep --regexp=x .env`, `grep --file=.env x`, `grep -ef .env x`, `rg -f .env x`, `rg -g .env x`, `jq . .env`, `jq -f p.jq .env`, `jq --from-file=.env`, `jq --rawfile a .env -n 1`, `jq --slurpfile a .env -n 1`, `cat ~/.netrc`, `POSIXLY_CORRECT=1 grep foo -e .env`, `env POSIXLY_CORRECT=1 grep foo -e .env`, `grep -- -e .env`, `grep foo -- -e .env`, je gängige Option ohne Wert `<cmd> <opt> x .env`, `grep foo${IFS}.env x`, `rg foo${IFS}.env x`, `jq .${IFS}.env`, `grep -e foo${IFS}.env x`, `grep .env.* x`, `grep *.key x`, `grep ~/.ssh/id_rsa* x`, `grep --regexp=foo${IFS}.env x`, `grep .env(|.local) y`, `grep -e .env(|.local) y`, `grep --regexp=.env(|.local) y`, `jq .env(|.local)`, `grep .env<-> y`, `grep =.env x`, `grep "$(cat .env)" x`, ``grep "`cat .env`" x``, `grep "\$x" .env`, `jq "$(cat .env)"`, `grep "" .env`, `grep $(echo foo) .env`, `eval grep .env(|.local)`, `command eval grep .env(|.local)`, `eval grep -e .env(|.local) x`, `eval jq .env(|.local)`, `eval grep .env<-> x`, `eval grep "$(echo foo)" .env`, ``eval grep `echo foo` .env``, `bash -c 'eval grep .env(|.local)'`, `bash -c "grep $(echo foo) .env"`, ``bash -c "grep `echo foo` .env"``, `sudo -s grep 'x$IFS./.env'`, `sudo -i grep 'x$IFS./.env'`, `sudo --shell grep 'x$IFS./.env'`, `sudo --login grep 'x$IFS./.env'`, `sudo -sE grep 'x$IFS./.env'`, `sudo -u root -s grep 'x$IFS./.env'`, `sudo -s jq 'x$IFS./.env'`, `sudo -s rg 'x$IFS./.env'`, `sudo grep '\.env' x`, `env X=1 grep '\.env' x`, `X=1 grep '\.env' x`, `command grep '\.env' x`, `grep ".env" y`, `grep '.env'/.env y`, `grep '.e''nv' y`, `grep --regexp='\.env' ci.yml`, `` `grep '`;cat .env;`'` ``, `` `grep -e '`;cat .env;`'` x ``, `export GREP_OPTIONS='-e x'; grep '.env'`, `export RIPGREP_CONFIG_PATH=/tmp/c; rg '.env'`.
 - Die Globs des Hooks bleiben unverändert, auch `**/.env.*`. Alle anderen Leser und Regeln bleiben unverändert.
-- Vorlagen (Owner-Antwort zu i): Die Ausnahmen des Hooks (`SecretExceptions`, `src/Monarch.Policy/ToolCallTypes.cs:103`, heute nur `**/.env.example`) bekommen `**/.env.sample` und `**/.env.template` dazu. Das ist eine Lockerung und gehört zu Q-0220, also erst nach belegter Sperre.
+- Vorlagen (Owner-Antwort zu i): Die Ausnahmen des Hooks (`SecretExceptions`, `src/Monarch.Policy/ToolCallTypes.cs:103`, vor Q-0220 nur `**/.env.example`) bekommen `**/.env.sample` und `**/.env.template` dazu. Das ist die einzige Lockerung von Q-0220; sie kommt nach belegter Sperre.
 
 ## Restrisiko
 
@@ -229,8 +230,11 @@ Aufräumen: `rm -r W` entfernte die Symlinks `sl.txt` und `sym.txt`. Bei `.env`,
 - Werkzeuge außerhalb der Sandbox: MCP-Server und Hooks laufen nicht in ihr. Das Grep-Werkzeug ist laut Doku nur nach bestem Bemühen abgedeckt, etwa nicht bei einer Suche über ein ganzes Verzeichnis.
 - Weitere Credential-Orte (etwa `~/.aws`) stehen nicht in der Liste, weil der Hook sie heute nicht kennt. Eine Erweiterung entscheidet der Owner.
 - Die Sperre hält nur, solange `sandbox.allowUnsandboxedCommands` auf `false` steht und es keine `excludedCommands` gibt (heute so; der Befehl in §3 prüft das Erste).
-- Schon heute im Hook: Tokens mit `-` am Anfang prüft er nicht (`IsSecretToken`, `ToolCallPolicy.cs:429-430`). `grep -r --include=.env.test PASS .` liest also eine Datei, die weder Hook noch Sandbox schützt. Für Namen der Liste greift die Sandbox.
-- Groß- und Kleinschreibung: Der Hook vergleicht ohne Rücksicht darauf (`MatchesAnyCI`, `ToolCallPolicy.cs:432-436`). Ob die Sandbox `A.KEY` sperrt, zeigt Probe a3; wenn nicht, gilt das als Restrisiko.
+- Schon heute im Hook: Tokens mit `-` am Anfang prüft er nicht (`IsSecretToken`, `ToolCallPolicy.cs:429-430`). `grep -r --include=.env.vor-umbenennung PASS .` liest also eine Datei, die weder Hook noch Sandbox schützt; ebenso Werte direkt an der Option wie `grep -f.env x`. Für Namen der Liste greift die Sandbox.
+- Groß- und Kleinschreibung: Der Hook vergleicht ohne Rücksicht darauf (`MatchesAnyCI`, `ToolCallPolicy.cs:432-436`). Die Sandbox sperrt `A.KEY` ebenfalls (Probe a3).
+- Für Namen außerhalb der Liste, für Dateien außerhalb von ~ und unter Linux schützt allein der Hook.
+- Befehlsersetzungen ($(…), Backticks, <(…)) lext der Lexer als eigene Segmente vor das umgebende Segment (ShellLexer.cs:36-37, :168, :221, :262, :283, :372); protect_secrets prüft sie wie jedes Segment (ToolCallPolicy.cs:391). Was eine Ersetzung ausgibt, sieht der Hook nicht.
+- Fehlalarm bleibt (#66, #169, #177): Ein Muster oder Filter, der einen Secret-Namen enthält, wird verweigert, auch wenn keine Credential-Datei gelesen wird.
 
 ## Offene Fragen an den Owner
 

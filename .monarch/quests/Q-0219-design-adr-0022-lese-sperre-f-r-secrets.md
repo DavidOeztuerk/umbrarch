@@ -3,7 +3,7 @@ id: Q-0219
 gate: G-0132
 kind: main
 rank: A
-state: in_progress
+state: in_review
 dod:
   - "ADR-0022 leitet die Credential-Pfade aus protect_secrets ab (ToolCallTypes.cs:125-126, ToolCallPolicy.cs:375-436)"
   - "Fertiger, idempotenter Settings-Befehl mit Backup für den Owner"

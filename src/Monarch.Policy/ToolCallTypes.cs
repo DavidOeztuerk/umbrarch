@@ -100,7 +100,7 @@ public sealed record PolicyOptions
     public IReadOnlyList<string> ExtraSecretGlobs { get; init; } = [];
 
     /// <summary>Ausnahmen vom Secret-Schutz.</summary>
-    public IReadOnlyList<string> SecretExceptions { get; init; } = ["**/.env.example"];
+    public IReadOnlyList<string> SecretExceptions { get; init; } = ["**/.env.example", "**/.env.sample", "**/.env.template"];
 
     /// <summary>Verbotene Bash-Muster (<c>*</c>-Glob gegen jedes Kommando-Segment).</summary>
     public IReadOnlyList<string> DenyBash { get; init; } =
