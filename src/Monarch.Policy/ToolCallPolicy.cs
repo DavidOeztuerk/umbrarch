@@ -39,14 +39,14 @@ public static partial class ToolCallPolicy
 
     /// <summary>
     /// Bash-Kommandowörter, die als eindeutig lesend gelten (Heuristik, bewusst klein): ls cat head tail less more grep rg wc stat pwd echo
-    /// printf which whoami date diff file tree du df sort uniq cut jq test [ true false cd basename dirname realpath sed awk (ohne -i), find
+    /// printf which whoami date diff file tree du df sort uniq cut jq test [ true false cd basename dirname realpath readlink sed awk (ohne -i), find
     /// (ohne -delete/-exec) sowie die Git-Unterkommandos status log diff show rev-parse ls-files check-ignore blame describe ls-tree rev-list
     /// shortlog grep. Alles andere, jede Umleitung nach <c>&gt;</c> (außer /dev/null und Dateideskriptoren) und unbekannte Kommandos gelten als mutierend.
     /// </summary>
     private static readonly string[] ReadOnlyWords =
         ["ls", "cat", "head", "tail", "less", "more", "grep", "rg", "wc", "stat", "pwd", "echo", "printf", "which", "whoami", "date", "diff",
          "file", "tree", "du", "df", "sort", "uniq", "cut", "jq", "test", "[", "true", "false", "cd", "basename", "dirname", "realpath",
-         "sed", "awk", "find"];
+         "readlink", "sed", "awk", "find"];
 
     private static readonly string[] ReadOnlyGit =
         ["status", "log", "diff", "show", "rev-parse", "ls-files", "check-ignore", "blame", "describe", "ls-tree", "rev-list", "shortlog", "grep"];
