@@ -67,6 +67,8 @@ public sealed class ProtectBranchesTests : IDisposable
     [InlineData("echo hi && git push origin main")]
     [InlineData("sudo git push origin main")]
     [InlineData("git push origin tag v1 main")]
+    [InlineData("git push --tags origin main")]
+    [InlineData("git push origin --tags main")]
     public void Push_to_a_protected_branch_is_denied(string cmd) => Denied(cmd, Repo("r"));
 
     [Fact]
@@ -308,5 +310,34 @@ public sealed class ProtectBranchesTests : IDisposable
         Denied(cmd, repo, agent: "monarch:warden");
         Denied(cmd, repo, agent: "general-purpose");
         Allowed(cmd, repo);
+    }
+
+    [Fact]
+    public void Push_with_C_is_judged_by_the_C_target_not_the_calling_directory()
+    {
+        // Q-0224 / #90: Aufruf im Haupt-Checkout (develop), Ziel ist eine Feature-Worktree.
+        var main = Repo("main-c", "ref: refs/heads/develop");
+        var wtGit = Path.Combine(main, ".git", "worktrees", "G-0109");
+        Directory.CreateDirectory(wtGit);
+        File.WriteAllText(Path.Combine(wtGit, "HEAD"), "ref: refs/heads/monarch/G-0109-mac-latenz\n");
+        File.WriteAllText(Path.Combine(wtGit, "commondir"), "../..\n");
+        var wt = Path.Combine(main, ".claude", "worktrees", "G-0109");
+        Directory.CreateDirectory(wt);
+        File.WriteAllText(Path.Combine(wt, ".git"), $"gitdir: {wtGit}\n");
+
+        Allowed("git -C .claude/worktrees/G-0109 push -q", main);
+        Allowed($"git -C {wt} push origin HEAD", main);
+
+        // Ein geschuetztes -C-Ziel bleibt verweigert, egal woher aufgerufen.
+        var prot = Repo("prot-c", "ref: refs/heads/main");
+        Denied($"git -C {prot} push", _tmp);
+
+        // Strenge Pfade: GIT_DIR und --git-dir pruefen weiter alle Kandidaten (Integrations-Branch = ask, nie allow).
+        Assert.NotEqual(PolicyDecisionKind.Allow, Run($"GIT_DIR={main}/.git git -C .claude/worktrees/G-0109 push -q", main).Kind);
+        Assert.NotEqual(PolicyDecisionKind.Allow, Run($"git --git-dir={main}/.git -C {wt} push -q", main).Kind);
+
+        // Ausdruecklicher Ziel-Refspec auf geschuetzt bleibt verweigert.
+        Denied("git -C .claude/worktrees/G-0109 push origin HEAD:main", main);
+        Assert.NotEqual(PolicyDecisionKind.Allow, Run("git -C .claude/worktrees/G-0109 push origin develop", main).Kind);
     }
 }
