@@ -39,6 +39,7 @@ ask() {
 
 # PreToolUse in an awakened project is fail-closed (ask); everything else that
 # cannot run stays fail-open for hooks (they allow nothing) and the statusline.
+# Ohne Binary laufen die Regeln nicht; Umgehungen außerhalb eines erweckten Projekts sind Restrisiko, bis #183 (v0.3) das Binary mitliefert.
 fail() {
   case $mode in
     hook|statusline)

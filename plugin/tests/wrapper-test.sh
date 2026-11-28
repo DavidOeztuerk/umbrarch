@@ -32,6 +32,9 @@ run() { # dir, home, args... -> sets OUT, CODE (stdin: {})
 }
 isask() { case $OUT in *'"permissionDecision":"ask"'*) return 0 ;; *) return 1 ;; esac; }
 
+# 0. hooks.json runs the wrapper directly: it must be executable (Exec-Bit lost in 73dfab6, Warden PR 182)
+[ -x "$wrapper" ]; check "wrapper is executable (hooks.json calls it directly)" $?
+
 # 1. happy path, first run hashes, second run uses the fast path
 mkhome
 run "$proj" "$H" hook pre-tool-use; [ "$CODE" = 0 ] && [ "$OUT" = "REAL hook pre-tool-use" ]; check "good binary runs" $?
