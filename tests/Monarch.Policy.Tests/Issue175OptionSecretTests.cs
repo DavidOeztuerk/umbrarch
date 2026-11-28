@@ -28,6 +28,12 @@ public class Issue175OptionSecretTests
     [InlineData("rg -f.env x")]
     [InlineData("grep -r --include=.env.vor-umbenennung PASS .")]
     [InlineData("grep --file=.env x")]
+    [InlineData("grep -nf.env x")]
+    [InlineData("rg -nf.env x")]
+    [InlineData("grep -rf.env x")]
+    [InlineData("grep -f'.env' x")]
+    [InlineData("grep -n -f.env x")]
+    [InlineData("true && grep -f.env x")]
     public void Option_attached_secret_values_are_denied(string cmd) => DeniedBySecrets(ToolCallPolicyTests.Bash(cmd));
 
     [Theory]

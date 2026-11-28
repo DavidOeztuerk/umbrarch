@@ -429,22 +429,19 @@ public static partial class ToolCallPolicy
     // Ein Wert direkt an einer Option (-f.env, --include=.env.x) wird wie ein eigenes Token geprüft.
     private static bool IsSecretToken(PolicyContext ctx, Canon paths, string token)
     {
-        if (token.StartsWith('-'))
-        {
-            var value = OptionValue(token);
-            return value is { Length: > 0 } v && IsSecretToken(ctx, paths, v);
-        }
-        return paths.RelAll(token).Any(rel => rel.Length > 0 && IsSecret(ctx, rel));
-    }
-
-    private static string? OptionValue(string token)
-    {
         if (token.StartsWith("--", StringComparison.Ordinal))
         {
             var eq = token.IndexOf('=');
-            return eq > 0 ? token[(eq + 1)..] : null;
+            return eq > 0 && IsSecretToken(ctx, paths, token[(eq + 1)..]);
         }
-        return token.Length > 2 ? token[2..] : null;
+        if (token.StartsWith('-'))
+        {
+            // Gebündelte Kurzoptionen (-nf.env): jede Suffix-Position kann der Wert sein.
+            for (var i = 1; i < token.Length; i++)
+                if (IsSecretToken(ctx, paths, token[i..])) return true;
+            return false;
+        }
+        return paths.RelAll(token).Any(rel => rel.Length > 0 && IsSecret(ctx, rel));
     }
 
     private static bool IsSecret(PolicyContext ctx, string rel, bool tool = false)
