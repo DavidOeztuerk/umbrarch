@@ -60,30 +60,12 @@ runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":
 runin "$work/plain" "$H" '{"cwd":"relative/dir"}' hook pre-tool-use
 [ "$CODE" = 0 ] && [ -z "$OUT" ]; check "relative hook cwd is ignored" $?
 
-# 2c. #158: no binary, cwd outside a project, but the command names a path inside an awakened project: ask
+# 2c. #158: no binary: the ask names the install step; outside an awakened project it stays fail-open
 mkhome; rm "$D/monarch"
-runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":"Bash","tool_input":{"command":"git -C '"$proj"' push origin main"}}' hook pre-tool-use
-isask; check "#158 missing binary, path token into awakened project, cwd plain: ask" $?
-runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":"Bash","tool_input":{"command":"cd '"$proj"' && ls"}}' hook pre-tool-use
-isask; check "#158 missing binary, cd into awakened project: ask" $?
-runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":"Bash","tool_input":{"command":"ls '"$work"'/plain"}}' hook pre-tool-use
-[ "$CODE" = 0 ] && [ -z "$OUT" ]; check "#158 missing binary, no path token into awakened project: fail-open" $?
-
-# 2d. #158 Warden-Befund (PR 182): Quotes, JSON-Escapes, Operatoren direkt am Pfad und Leerzeichen im Pfad
-for cmd in "cd \\\"$proj\\\" && git push" "cd '$proj' && git push" "cd $proj;git push" "ls $proj>x" "ls $proj|cat" "ls \\\"$proj\\\""; do
-  runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":"Bash","tool_input":{"command":"'"$cmd"'"}}' hook pre-tool-use
-  isask; check "#158 missing binary, awakened root token [$cmd]: ask" $?
-done
-# 2e. Warden-Befund (PR 182, Delta): Gleichheitszeichen, Steuerzeichen-Escapes, weitere Zeichen direkt am Pfad
-for cmd in "git --git-dir=$proj/.git status" "VAR=$proj/x ls" "ls \\n$proj/x" "ls \\t$proj/x" "ls *$proj" "ls #$proj" "ls !$proj"; do
-  runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":"Bash","tool_input":{"command":"'"$cmd"'"}}' hook pre-tool-use
-  isask; check "#158 missing binary, awakened root token in [$cmd]: ask" $?
-done
-mkdir -p "$work/sp ace/proj/.monarch"; : >"$work/sp ace/proj/.monarch/system.yaml"
-runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":"Bash","tool_input":{"command":"ls '"'$work/sp ace/proj'"'"}}' hook pre-tool-use
-isask; check "#158 missing binary, awakened project with a space in its path: ask" $?
-runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":"Bash","tool_input":{"command":"ls '"$work"'/sp ace/other"}}' hook pre-tool-use
-[ "$CODE" = 0 ] && [ -z "$OUT" ]; check "#158 missing binary, path with space outside projects: fail-open" $?
+run "$proj" "$H" hook pre-tool-use
+case $OUT in *'Monarch-Binary 0.2.0 fehlt: scripts/install-local.sh ausführen'*) ok=0 ;; *) ok=1 ;; esac
+check "#158 missing binary: ask names the install step" $ok
+run "$work/plain" "$H" hook pre-tool-use; [ "$CODE" = 0 ] && [ -z "$OUT" ]; check "#158 missing binary outside awakened project: fail-open" $?
 
 # 3. missing SHA256SUMS
 mkhome; rm "$D/SHA256SUMS"

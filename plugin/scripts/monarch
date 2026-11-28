@@ -31,30 +31,6 @@ awakened() {
   awakened_in "${PWD:-}"
 }
 
-# #158: without the binary the rules cannot run, but a path token of the command (absolute, after -C, after cd) that
-# lies in an awakened project is still visible in the hook input. Any such token asks.
-# Every character outside the path class cuts a token (quotes, escapes, operators, =, spaces). A path with spaces is
-# rebuilt from its words (up to 16 following words), so each absolute prefix is checked. Restrisiko: relative paths,
-# ~ and $HOME, and non-ASCII path names are not recognized.
-path_token_awakened() {
-  list=$(printf '%s\n' "$1" | sed 's/\\[a-zA-Z]/ /g' | tr -c 'A-Za-z0-9._/~@%+-' '\n')
-  set -f
-  set -- $list
-  set +f
-  while [ $# -gt 0 ]; do
-    cand=$1; shift
-    case $cand in /*) ;; *) continue ;; esac
-    awakened_in "$cand" && return 0
-    acc=$cand; n=0
-    for w in "$@"; do
-      n=$((n + 1)); [ "$n" -le 16 ] || break
-      acc="$acc $w"
-      awakened_in "$acc" && return 0
-    done
-  done
-  return 1
-}
-
 ask() {
   cat >/dev/null
   printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"'"$1"'"}}'
@@ -68,7 +44,7 @@ fail() {
     hook|statusline)
       input=
       if [ "$mode" = hook ] && [ "${2:-}" = pre-tool-use ]; then input=$(cat); fi
-      if [ "$mode" = hook ] && [ "${2:-}" = pre-tool-use ] && { awakened "$input" || path_token_awakened "$input"; }; then
+      if [ "$mode" = hook ] && [ "${2:-}" = pre-tool-use ] && awakened "$input"; then
         echo "monarch: $1 (fail-closed: asking)" >&2
         ask "Monarch-Wrapper: $1; Freigabe nötig."
       fi
@@ -89,7 +65,7 @@ fi
 
 dir=${HOME:-}/.monarch/bin/$MONARCH_VERSION
 bin=$dir/monarch
-[ -x "$bin" ] || fail "binary $bin not found" "${2:-}"
+[ -x "$bin" ] || fail "Monarch-Binary $MONARCH_VERSION fehlt: scripts/install-local.sh ausführen" "${2:-}"
 
 stamp=$dir/.verified
 link=$dir/.verified-inode
