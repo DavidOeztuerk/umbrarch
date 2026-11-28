@@ -21,8 +21,7 @@ awakened_in() {
 # The first `"cwd":"` is the hook's own field (it precedes tool_input, and quotes inside strings are escaped as \").
 # A path with a JSON escape is not decoded and falls back to $PWD.
 awakened() {
-  line=
-  IFS= read -r line || :
+  line=$(printf '%s\n' "${1:-}" | sed -n 1p)
   case $line in
     *'"cwd":"'*)
       c=${line#*'"cwd":"'}
@@ -30,6 +29,18 @@ awakened() {
       case $c in *\\*) ;; *) awakened_in "$c" && return 0 ;; esac ;;
   esac
   awakened_in "${PWD:-}"
+}
+
+# #158: without the binary the rules cannot run, but a path token of the command (absolute, after -C, after cd) that
+# lies in an awakened project is still visible in the hook input. Any such token asks.
+path_token_awakened() {
+  list=$(printf '%s\n' "$1" | tr ' "\t,:{}[]' '\n')
+  while IFS= read -r t; do
+    case $t in /*) awakened_in "$t" && return 0 ;; esac
+  done <<EOF
+$list
+EOF
+  return 1
 }
 
 ask() {
@@ -43,7 +54,9 @@ ask() {
 fail() {
   case $mode in
     hook|statusline)
-      if [ "$mode" = hook ] && [ "${2:-}" = pre-tool-use ] && awakened; then
+      input=
+      if [ "$mode" = hook ] && [ "${2:-}" = pre-tool-use ]; then input=$(cat); fi
+      if [ "$mode" = hook ] && [ "${2:-}" = pre-tool-use ] && { awakened "$input" || path_token_awakened "$input"; }; then
         echo "monarch: $1 (fail-closed: asking)" >&2
         ask "Monarch-Wrapper: $1; Freigabe nötig."
       fi

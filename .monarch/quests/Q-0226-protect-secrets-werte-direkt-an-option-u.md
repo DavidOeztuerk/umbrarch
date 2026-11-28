@@ -14,5 +14,6 @@ scope:
   exclude: []
 estimate: { session_pct: 5, weekly_pct: 1, gold_usd: 0 }
 boss: "grep -f.env x, rg -f.env x und grep -r --include=.env.x PASS . werden verweigert; Gegenproben ohne Credential-Namen bleiben erlaubt"
+board: { pr: 182 }
 ---
 # protect_secrets: Werte direkt an Option und --include prüfen (#175)

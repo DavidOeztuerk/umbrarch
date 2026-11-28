@@ -4,7 +4,7 @@
 here=$(cd "$(dirname "$0")" && pwd)
 wrapper=$here/../scripts/monarch
 version=$(sed -n 's/^MONARCH_VERSION=//p' "$wrapper" | head -n1)
-work=$(mktemp -d) || exit 2
+work=$(mktemp -d "${TMPDIR:-/tmp}/wrapper-test.XXXXXX") || exit 2
 trap 'rm -rf "$work"' EXIT
 fails=0
 pass() { echo "ok   - $1"; }
@@ -55,10 +55,19 @@ runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$proj"'/sub","hook_event_na
 isask; check "hook cwd in an awakened project, \$PWD plain: ask" $?
 runin "$proj" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":"Bash"}' hook pre-tool-use
 isask; check "hook cwd plain, \$PWD awakened: ask (stricter of both)" $?
-runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":"Bash","tool_input":{"command":"echo \"cwd\":\"'"$proj"'\""}}' hook pre-tool-use
+runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":"Bash","tool_input":{"command":"echo \"cwd\":\"'"$work"'/plain\""}}' hook pre-tool-use
 [ "$CODE" = 0 ] && [ -z "$OUT" ]; check "a quoted cwd inside a command string is not mistaken for the hook cwd: fail-open" $?
 runin "$work/plain" "$H" '{"cwd":"relative/dir"}' hook pre-tool-use
 [ "$CODE" = 0 ] && [ -z "$OUT" ]; check "relative hook cwd is ignored" $?
+
+# 2c. #158: no binary, cwd outside a project, but the command names a path inside an awakened project: ask
+mkhome; rm "$D/monarch"
+runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":"Bash","tool_input":{"command":"git -C '"$proj"' push origin main"}}' hook pre-tool-use
+isask; check "#158 missing binary, path token into awakened project, cwd plain: ask" $?
+runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":"Bash","tool_input":{"command":"cd '"$proj"' && ls"}}' hook pre-tool-use
+isask; check "#158 missing binary, cd into awakened project: ask" $?
+runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":"Bash","tool_input":{"command":"ls '"$work"'/plain"}}' hook pre-tool-use
+[ "$CODE" = 0 ] && [ -z "$OUT" ]; check "#158 missing binary, no path token into awakened project: fail-open" $?
 
 # 3. missing SHA256SUMS
 mkhome; rm "$D/SHA256SUMS"
