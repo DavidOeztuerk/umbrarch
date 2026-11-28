@@ -3,7 +3,7 @@ id: Q-0221
 gate: G-0132
 kind: main
 rank: A
-state: in_review
+state: cleared
 dod:
   - "Roter Test zuerst: readlink ~/.monarch/bin/monarch erlaubt"
   - "Wächter: readlink mit Umleitung in Schutzpfad bleibt Deny"
