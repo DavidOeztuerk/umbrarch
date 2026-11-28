@@ -37,7 +37,7 @@ public class McpServerTests
             """{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"verify","arguments":{}}}""");
         Assert.Equal(6, r.Count);
         Assert.Equal("2025-06-18", r[0]["result"]!["protocolVersion"]!.GetValue<string>());
-        Assert.Equal("0.1.3", r[0]["result"]!["serverInfo"]!["version"]!.GetValue<string>());
+        Assert.Equal("0.2.0", r[0]["result"]!["serverInfo"]!["version"]!.GetValue<string>());
         var forecast = r[2]["result"]!["tools"]!.AsArray().Single(t => t!["name"]!.GetValue<string>() == "mana_forecast")!["description"]!.GetValue<string>();
         Assert.DoesNotContain("adaptive", forecast, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("recap", forecast, StringComparison.OrdinalIgnoreCase);

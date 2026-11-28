@@ -112,8 +112,8 @@ run "$proj" "$H" hook pre-tool-use; isask; check "in-place edit with old mtime i
 mkhome; : >"$D/.verified"; printf '#!/bin/sh\necho EVIL\n' >"$D/monarch"
 run "$proj" "$H" hook pre-tool-use; isask; check "forged stamp file does not skip verification: ask" $?
 
-# 8. ADR-0019 (Q-0187), ADR-0021 §3: the wrapper is 0.1.3 and only the old binary 0.1.1 is installed: fail-closed
-[ "$version" = 0.1.3 ]; check "wrapper version is 0.1.3" $?
+# 8. ADR-0019 (Q-0187), ADR-0021 §3: the wrapper is 0.2.0 and only the old binary 0.1.1 is installed: fail-closed
+[ "$version" = 0.2.0 ]; check "wrapper version is 0.2.0" $?
 mkhome; rm -rf "$D"
 old=$H/.monarch/bin/0.1.1; mkdir -p "$old"
 printf '#!/bin/sh\necho OLD "$@"\n' >"$old/monarch"; chmod +x "$old/monarch"

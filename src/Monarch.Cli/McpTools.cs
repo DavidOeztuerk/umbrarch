@@ -14,7 +14,7 @@ namespace Monarch.Cli;
 /// <summary><c>monarch mcp</c>: the stdio MCP server with exactly six phase-0 tools. There is deliberately no verify, clear, promote or permit tool.</summary>
 internal static class McpTools
 {
-    private const string ServerVersion = "0.1.3";
+    private const string ServerVersion = "0.2.0";
     private const int MaxKnowledgeBytes = 1_000_000;
 
     /// <summary>Serves MCP on the environment's streams.</summary>
