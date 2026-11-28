@@ -1,7 +1,7 @@
 #!/bin/sh
 # Monarch wrapper: resolves the versioned binary, verifies SHA-256 once per
 # version (stamp file), then execs. Runs on every tool call: keep it cheap.
-MONARCH_VERSION=0.1.3
+MONARCH_VERSION=0.2.0
 mode=${1:-}
 
 # Is a directory (or a parent) an awakened project? Pure shell loop, no fork.
@@ -21,8 +21,7 @@ awakened_in() {
 # The first `"cwd":"` is the hook's own field (it precedes tool_input, and quotes inside strings are escaped as \").
 # A path with a JSON escape is not decoded and falls back to $PWD.
 awakened() {
-  line=
-  IFS= read -r line || :
+  line=$(printf '%s\n' "${1:-}" | sed -n 1p)
   case $line in
     *'"cwd":"'*)
       c=${line#*'"cwd":"'}
@@ -40,10 +39,13 @@ ask() {
 
 # PreToolUse in an awakened project is fail-closed (ask); everything else that
 # cannot run stays fail-open for hooks (they allow nothing) and the statusline.
+# Ohne Binary laufen die Regeln nicht; Umgehungen außerhalb eines erweckten Projekts sind Restrisiko, bis #183 (v0.3) das Binary mitliefert.
 fail() {
   case $mode in
     hook|statusline)
-      if [ "$mode" = hook ] && [ "${2:-}" = pre-tool-use ] && awakened; then
+      input=
+      if [ "$mode" = hook ] && [ "${2:-}" = pre-tool-use ]; then input=$(cat); fi
+      if [ "$mode" = hook ] && [ "${2:-}" = pre-tool-use ] && awakened "$input"; then
         echo "monarch: $1 (fail-closed: asking)" >&2
         ask "Monarch-Wrapper: $1; Freigabe nötig."
       fi
@@ -64,7 +66,7 @@ fi
 
 dir=${HOME:-}/.monarch/bin/$MONARCH_VERSION
 bin=$dir/monarch
-[ -x "$bin" ] || fail "binary $bin not found" "${2:-}"
+[ -x "$bin" ] || fail "Monarch-Binary $MONARCH_VERSION fehlt: scripts/install-local.sh ausführen" "${2:-}"
 
 stamp=$dir/.verified
 link=$dir/.verified-inode

@@ -4,7 +4,7 @@
 here=$(cd "$(dirname "$0")" && pwd)
 wrapper=$here/../scripts/monarch
 version=$(sed -n 's/^MONARCH_VERSION=//p' "$wrapper" | head -n1)
-work=$(mktemp -d) || exit 2
+work=$(mktemp -d "${TMPDIR:-/tmp}/wrapper-test.XXXXXX") || exit 2
 trap 'rm -rf "$work"' EXIT
 fails=0
 pass() { echo "ok   - $1"; }
@@ -32,6 +32,9 @@ run() { # dir, home, args... -> sets OUT, CODE (stdin: {})
 }
 isask() { case $OUT in *'"permissionDecision":"ask"'*) return 0 ;; *) return 1 ;; esac; }
 
+# 0. hooks.json runs the wrapper directly: it must be executable (Exec-Bit lost in 73dfab6, Warden PR 182)
+[ -x "$wrapper" ]; check "wrapper is executable (hooks.json calls it directly)" $?
+
 # 1. happy path, first run hashes, second run uses the fast path
 mkhome
 run "$proj" "$H" hook pre-tool-use; [ "$CODE" = 0 ] && [ "$OUT" = "REAL hook pre-tool-use" ]; check "good binary runs" $?
@@ -55,10 +58,17 @@ runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$proj"'/sub","hook_event_na
 isask; check "hook cwd in an awakened project, \$PWD plain: ask" $?
 runin "$proj" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":"Bash"}' hook pre-tool-use
 isask; check "hook cwd plain, \$PWD awakened: ask (stricter of both)" $?
-runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":"Bash","tool_input":{"command":"echo \"cwd\":\"'"$proj"'\""}}' hook pre-tool-use
+runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":"Bash","tool_input":{"command":"echo \"cwd\":\"'"$work"'/plain\""}}' hook pre-tool-use
 [ "$CODE" = 0 ] && [ -z "$OUT" ]; check "a quoted cwd inside a command string is not mistaken for the hook cwd: fail-open" $?
 runin "$work/plain" "$H" '{"cwd":"relative/dir"}' hook pre-tool-use
 [ "$CODE" = 0 ] && [ -z "$OUT" ]; check "relative hook cwd is ignored" $?
+
+# 2c. #158: no binary: the ask names the install step; outside an awakened project it stays fail-open
+mkhome; rm "$D/monarch"
+run "$proj" "$H" hook pre-tool-use
+case $OUT in *'Monarch-Binary 0.2.0 fehlt: scripts/install-local.sh ausführen'*) ok=0 ;; *) ok=1 ;; esac
+check "#158 missing binary: ask names the install step" $ok
+run "$work/plain" "$H" hook pre-tool-use; [ "$CODE" = 0 ] && [ -z "$OUT" ]; check "#158 missing binary outside awakened project: fail-open" $?
 
 # 3. missing SHA256SUMS
 mkhome; rm "$D/SHA256SUMS"
@@ -103,8 +113,8 @@ run "$proj" "$H" hook pre-tool-use; isask; check "in-place edit with old mtime i
 mkhome; : >"$D/.verified"; printf '#!/bin/sh\necho EVIL\n' >"$D/monarch"
 run "$proj" "$H" hook pre-tool-use; isask; check "forged stamp file does not skip verification: ask" $?
 
-# 8. ADR-0019 (Q-0187), ADR-0021 §3: the wrapper is 0.1.3 and only the old binary 0.1.1 is installed: fail-closed
-[ "$version" = 0.1.3 ]; check "wrapper version is 0.1.3" $?
+# 8. ADR-0019 (Q-0187), ADR-0021 §3: the wrapper is 0.2.0 and only the old binary 0.1.1 is installed: fail-closed
+[ "$version" = 0.2.0 ]; check "wrapper version is 0.2.0" $?
 mkhome; rm -rf "$D"
 old=$H/.monarch/bin/0.1.1; mkdir -p "$old"
 printf '#!/bin/sh\necho OLD "$@"\n' >"$old/monarch"; chmod +x "$old/monarch"

@@ -426,8 +426,23 @@ public static partial class ToolCallPolicy
         return false;
     }
 
-    private static bool IsSecretToken(PolicyContext ctx, Canon paths, string token) =>
-        !token.StartsWith('-') && paths.RelAll(token).Any(rel => rel.Length > 0 && IsSecret(ctx, rel));
+    // Ein Wert direkt an einer Option (-f.env, --include=.env.x) wird wie ein eigenes Token geprüft.
+    private static bool IsSecretToken(PolicyContext ctx, Canon paths, string token)
+    {
+        if (token.StartsWith("--", StringComparison.Ordinal))
+        {
+            var eq = token.IndexOf('=');
+            return eq > 0 && IsSecretToken(ctx, paths, token[(eq + 1)..]);
+        }
+        if (token.StartsWith('-'))
+        {
+            // Gebündelte Kurzoptionen (-nf.env): jede Suffix-Position kann der Wert sein.
+            for (var i = 1; i < token.Length; i++)
+                if (IsSecretToken(ctx, paths, token[i..])) return true;
+            return false;
+        }
+        return paths.RelAll(token).Any(rel => rel.Length > 0 && IsSecret(ctx, rel));
+    }
 
     private static bool IsSecret(PolicyContext ctx, string rel, bool tool = false)
     {

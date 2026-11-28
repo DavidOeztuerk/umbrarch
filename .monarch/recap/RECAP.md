@@ -1,10 +1,10 @@
 # RECAP
 
 ## Stand
-- Zeitpunkt: 2026-11-27T01:55:01Z
+- Zeitpunkt: 2026-11-28T01:35:15Z
 - Plan: Pro
-- Mana 5h: 57% (Limit 90%, Reset 2026-11-27T04:00:00Z)
-- Mana 7d: 81% (Limit 96%, Reset 2026-12-02T11:00:00Z)
+- Mana 5h: 17% (Limit 90%, Reset 2026-11-28T05:00:00Z)
+- Mana 7d: 91% (Limit 96%, Reset 2026-12-02T11:00:00Z)
 - Limits: 5h 90%, 7d 96% (plan default)
 
 ## Aktiv
@@ -60,7 +60,7 @@
 - Q-0150: Heikle Quest nach Standardregel 3: Warden-Runde über das Design vor dem Code, kein src-Code, kein anderer Test und keine andere Schwelle aufgeweicht, Schlussrunde des Wardens mit Verdict am Head-SHA
 
 ## Nächster konkreter Schritt
-Fix A umgesetzt (uncommittet): ToolSecretExceptions (.env.sample/.env.template) nur Read/Grep, Bash wie vor Q-0220; Policy 1692/1692. Kommentare #176, #104 (Milestone Phase 1+) gepostet. ADR-Diff A liegt dem Owner vor; Frage Q-0222: move-quest braucht Zielgate, sonst quest abandon. Danach schmale Warden-Prüfung Fix A, Q-0221 TDD, Warden-Schlussrunde PR #178.
+Option B für #17/#18 (ohne Code begonnen): Policy braucht $TMPDIR als Wurzel (PolicyContext hat keinen Temp-Pfad, ToolCallPolicy.cs ScopeLock Zeile ~536, ShadowReadOnly ~495). Rote Tests zuerst: Schreiben unter $TMPDIR erlaubt; $TMPDIR/../x, Symlink aus $TMPDIR in die Root, /etc/hosts, ../other/src/a.cs bleiben Deny. Dann #105 prüfen (Test-Repos unter $TMPDIR?). Dann #26 (plugin Warden-Export ':!.monarch'). Danach Warden-Schlussrunde (sonnet) über PR #182 auf dem neuen Head, gate verdict, gate merge, gate check, evidence sync je Quest, ledger verify. Head PR 182: 54f62e8.
 
 ## Offene Entscheidungen
-- KORREKTUR: Q-0222 ist NICHT abandoned. monarch quest abandon verweigert 'Invalid transition from Proposed to Abandoned'; Q-0222 bleibt proposed, Owner-Frage offen (accept+abandon oder anderer Weg).
+- Mana-Reserve 7d etwa 3 pp: Gate-Abschluss (Schlussrunde, Merge) hat Vorrang vor #17/#18/#26/#105 im nächsten Lauf.
