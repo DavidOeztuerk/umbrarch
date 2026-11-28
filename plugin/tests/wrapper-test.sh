@@ -74,6 +74,11 @@ for cmd in "cd \\\"$proj\\\" && git push" "cd '$proj' && git push" "cd $proj;git
   runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":"Bash","tool_input":{"command":"'"$cmd"'"}}' hook pre-tool-use
   isask; check "#158 missing binary, awakened root token [$cmd]: ask" $?
 done
+# 2e. Warden-Befund (PR 182, Delta): Gleichheitszeichen, Steuerzeichen-Escapes, weitere Zeichen direkt am Pfad
+for cmd in "git --git-dir=$proj/.git status" "VAR=$proj/x ls" "ls \\n$proj/x" "ls \\t$proj/x" "ls *$proj" "ls #$proj" "ls !$proj"; do
+  runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":"Bash","tool_input":{"command":"'"$cmd"'"}}' hook pre-tool-use
+  isask; check "#158 missing binary, awakened root token in [$cmd]: ask" $?
+done
 mkdir -p "$work/sp ace/proj/.monarch"; : >"$work/sp ace/proj/.monarch/system.yaml"
 runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":"Bash","tool_input":{"command":"ls '"'$work/sp ace/proj'"'"}}' hook pre-tool-use
 isask; check "#158 missing binary, awakened project with a space in its path: ask" $?
