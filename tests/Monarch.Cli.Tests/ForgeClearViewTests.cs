@@ -172,6 +172,8 @@ public class ForgeClearViewTests
 
             var running = 0;
             var peak = 0;
+            // Zwei gleichzeitige Anfragen werden abgewartet, statt auf Zeit zu hoffen: so ist peak >= 2 deterministisch.
+            var twoAtOnce = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             f.Intercept = async (req, ct) =>
             {
                 if (req.RequestUri!.AbsolutePath.Contains("/pulls/", StringComparison.Ordinal))
@@ -182,7 +184,12 @@ public class ForgeClearViewTests
                     {
                     }
 
-                    await Task.Delay(100, ct);
+                    if (now >= 2)
+                    {
+                        twoAtOnce.TrySetResult();
+                    }
+
+                    await twoAtOnce.Task.WaitAsync(TimeSpan.FromSeconds(30), ct);
                     Interlocked.Decrement(ref running);
                 }
 
@@ -203,10 +210,18 @@ public class ForgeClearViewTests
             f.Pulls[8] = (FakeForge.Sha, true);
             Seed.Quest(p, "Q-0001", "in_review", extra: Pr7);
             Seed.Quest(p, "Q-0002", "in_review", extra: "board: { provider: github, pr: 8 }\n");
+            // PR 8 hängt erst, nachdem die Anfrage an PR 7 eingegangen ist; danach endet nur die Frist die Anfrage.
+            var sevenAnswered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             f.Intercept = async (req, ct) =>
             {
+                if (req.RequestUri!.AbsolutePath.EndsWith("/pulls/7", StringComparison.Ordinal))
+                {
+                    sevenAnswered.TrySetResult();
+                }
+
                 if (req.RequestUri!.AbsolutePath.EndsWith("/pulls/8", StringComparison.Ordinal))
                 {
+                    await sevenAnswered.Task.WaitAsync(TimeSpan.FromSeconds(30), ct);
                     await Task.Delay(Timeout.Infinite, ct);
                 }
 
@@ -214,7 +229,7 @@ public class ForgeClearViewTests
             };
             var env = new CliEnv(p.Root, p.Home, new StringReader(string.Empty), new StringWriter(), new StringWriter(), p.Clock, f, new GitHubTokenProvider(_ => "tok-test", () => null), false, TempProject.NoVars);
             var quests = await new LocalFileBoard(p.Root).ListQuestsAsync(TestContext.Current.CancellationToken);
-            var r = ForgeClearView.Derive(env, ProjectPaths.Locate(p.Root, p.Home)!, quests, TimeSpan.FromMilliseconds(500));
+            var r = ForgeClearView.Derive(env, ProjectPaths.Locate(p.Root, p.Home)!, quests, TimeSpan.FromSeconds(3));
             Assert.Equal(["Q-0001"], r.Cleared);
             Assert.Contains("#8", r.Note, StringComparison.Ordinal);
             Assert.DoesNotContain("#7", r.Note, StringComparison.Ordinal);
