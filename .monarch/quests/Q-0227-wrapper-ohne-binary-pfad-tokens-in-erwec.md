@@ -14,5 +14,6 @@ scope:
   exclude: []
 estimate: { session_pct: 5, weekly_pct: 1, gold_usd: 0 }
 boss: "Hook ohne Binary: Befehl mit Pfad-Token in erwecktes Projekt wird erfragt, ohne Token bleibt fail-open"
+board: { pr: 182 }
 ---
 # Wrapper ohne Binary: Pfad-Tokens in erwecktes Projekt fragen (#158)

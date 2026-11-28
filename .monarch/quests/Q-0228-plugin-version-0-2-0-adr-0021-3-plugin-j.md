@@ -13,5 +13,6 @@ scope:
   exclude: []
 estimate: { session_pct: 3, weekly_pct: 1, gold_usd: 0 }
 boss: "Alle vier Versionsstellen zeigen 0.2.0; scripts/check-plugin-version.sh akzeptiert den PR"
+board: { pr: 182 }
 ---
 # Plugin-Version 0.2.0 (ADR-0021 §3): plugin.json, Wrapper, McpTools und Versionstests
