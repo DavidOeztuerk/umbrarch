@@ -69,6 +69,17 @@ isask; check "#158 missing binary, cd into awakened project: ask" $?
 runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":"Bash","tool_input":{"command":"ls '"$work"'/plain"}}' hook pre-tool-use
 [ "$CODE" = 0 ] && [ -z "$OUT" ]; check "#158 missing binary, no path token into awakened project: fail-open" $?
 
+# 2d. #158 Warden-Befund (PR 182): Quotes, JSON-Escapes, Operatoren direkt am Pfad und Leerzeichen im Pfad
+for cmd in "cd \\\"$proj\\\" && git push" "cd '$proj' && git push" "cd $proj;git push" "ls $proj>x" "ls $proj|cat" "ls \\\"$proj\\\""; do
+  runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":"Bash","tool_input":{"command":"'"$cmd"'"}}' hook pre-tool-use
+  isask; check "#158 missing binary, awakened root token [$cmd]: ask" $?
+done
+mkdir -p "$work/sp ace/proj/.monarch"; : >"$work/sp ace/proj/.monarch/system.yaml"
+runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":"Bash","tool_input":{"command":"ls '"'$work/sp ace/proj'"'"}}' hook pre-tool-use
+isask; check "#158 missing binary, awakened project with a space in its path: ask" $?
+runin "$work/plain" "$H" '{"session_id":"s","cwd":"'"$work"'/plain","tool_name":"Bash","tool_input":{"command":"ls '"$work"'/sp ace/other"}}' hook pre-tool-use
+[ "$CODE" = 0 ] && [ -z "$OUT" ]; check "#158 missing binary, path with space outside projects: fail-open" $?
+
 # 3. missing SHA256SUMS
 mkhome; rm "$D/SHA256SUMS"
 run "$proj" "$H" hook pre-tool-use; isask; check "missing SUMS, awakened: ask" $?

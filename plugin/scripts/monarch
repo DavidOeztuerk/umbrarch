@@ -33,13 +33,24 @@ awakened() {
 
 # #158: without the binary the rules cannot run, but a path token of the command (absolute, after -C, after cd) that
 # lies in an awakened project is still visible in the hook input. Any such token asks.
+# Tokens are cut at quotes, backslashes (JSON escapes), operators and spaces; a path with spaces is rebuilt from its
+# words (up to 16 following words), so each absolute prefix is checked. Relative paths, ~ and $HOME stay unseen (Restrisiko).
 path_token_awakened() {
-  list=$(printf '%s\n' "$1" | tr ' "\t,:{}[]' '\n')
-  while IFS= read -r t; do
-    case $t in /*) awakened_in "$t" && return 0 ;; esac
-  done <<EOF
-$list
-EOF
+  list=$(printf '%s\n' "$1" | tr ' \t\"\\\\'"'"';|&<>()$`,:{}[]' '\n')
+  set -f
+  set -- $list
+  set +f
+  while [ $# -gt 0 ]; do
+    cand=$1; shift
+    case $cand in /*) ;; *) continue ;; esac
+    awakened_in "$cand" && return 0
+    acc=$cand; n=0
+    for w in "$@"; do
+      n=$((n + 1)); [ "$n" -le 16 ] || break
+      acc="$acc $w"
+      awakened_in "$acc" && return 0
+    done
+  done
   return 1
 }
 
