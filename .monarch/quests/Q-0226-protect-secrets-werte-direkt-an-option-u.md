@@ -3,7 +3,7 @@ id: Q-0226
 gate: G-0134
 kind: main
 rank: A
-state: in_review
+state: cleared
 dod:
   - "Roter Test vorher für grep -f.env x, rg -f.env x, grep -r --include=.env.x PASS ."
   - "Gegenproben ohne Credential-Namen bleiben erlaubt"

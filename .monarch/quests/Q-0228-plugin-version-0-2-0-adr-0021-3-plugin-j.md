@@ -3,7 +3,7 @@ id: Q-0228
 gate: G-0134
 kind: main
 rank: A
-state: in_review
+state: cleared
 dod:
   - "plugin.json, MONARCH_VERSION im Wrapper, ServerVersion in McpTools.cs auf 0.2.0"
   - "Versionstests auf 0.2.0 angepasst, keine Prüfung entfernt"

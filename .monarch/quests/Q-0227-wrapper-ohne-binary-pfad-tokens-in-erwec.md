@@ -3,7 +3,7 @@ id: Q-0227
 gate: G-0134
 kind: main
 rank: A
-state: in_review
+state: cleared
 dod:
   - "Roter Test vorher in plugin/tests/wrapper-test.sh"
   - "Pfad-Token (absolut, -C, cd) in erwecktem Projekt -> ask"
